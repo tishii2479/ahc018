@@ -80,6 +80,7 @@ impl Vec2d {
         self.vec[pos.y as usize * self.m + pos.x as usize] += val
     }
 }
+
 #[allow(unused)]
 pub struct Vec2dBool {
     vec: Vec<bool>,

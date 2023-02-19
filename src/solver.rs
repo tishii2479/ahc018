@@ -8,14 +8,16 @@ use crate::{def::*, interactor::*, param::*};
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(input.n);
     let (xs, ys) = create_grid_axis(&input, param.p_grid_size);
+    let mut graph = Graph::new();
     for x in xs.iter() {
         for y in ys.iter() {
             let pos = Pos { x: *x, y: *y };
             state.crack_point(&pos, &param.p_test_power, interactor);
+            graph.add_point(&pos);
         }
     }
-    let graph = Graph::new(&xs, &ys, &input);
-    let mut annealing_state = AnnealingState::new(graph, state, param.c);
+    let mut annealing_state = AnnealingState::new(graph, state, input);
+    annealing_state.recalculate_all(param.c);
 
     // 繋ぐ辺を最適化する
     for _ in 0..100 {
@@ -50,72 +52,42 @@ struct Graph {
     edges: Vec<Edge>,
     adj: Vec<Vec<usize>>,
     pos_index: HashMap<Pos, usize>,
-    house: Vec<usize>,
-    source: Vec<usize>,
 }
 
 impl Graph {
-    fn new(xs: &Vec<i64>, ys: &Vec<i64>, input: &Input) -> Graph {
-        let mut points = vec![];
-        let mut pos_index = HashMap::new();
-        for x in xs.iter() {
-            for y in ys.iter() {
-                let pos = Pos { x: *x, y: *y };
-                pos_index.insert(pos, points.len());
-                points.push(pos);
-            }
+    fn new() -> Graph {
+        Graph {
+            points: vec![],
+            edges: vec![],
+            adj: vec![],
+            pos_index: HashMap::new(),
         }
-
-        let mut edges = vec![];
-        let mut adj = vec![vec![]; points.len()];
-        for x in xs.iter() {
-            for j in 0..(ys.len() - 1) {
-                let u = Pos { x: *x, y: ys[j] };
-                let v = Pos {
-                    x: *x,
-                    y: ys[j + 1],
-                };
-                let ui = pos_index.get(&u).unwrap();
-                let vi = pos_index.get(&v).unwrap();
-                adj[*ui].push(edges.len());
-                adj[*vi].push(edges.len());
-                edges.push(Edge { u: *ui, v: *vi });
-            }
-        }
-        for y in ys.iter() {
-            for i in 0..(xs.len() - 1) {
-                let u = Pos { x: xs[i], y: *y };
-                let v = Pos {
-                    x: xs[i + 1],
-                    y: *y,
-                };
-                let ui = pos_index.get(&u).unwrap();
-                let vi = pos_index.get(&v).unwrap();
-                adj[*ui].push(edges.len());
-                adj[*vi].push(edges.len());
-                edges.push(Edge { u: *ui, v: *vi });
-            }
-        }
-
-        let mut graph = Graph {
-            points,
-            edges,
-            adj,
-            pos_index,
-            house: vec![],
-            source: vec![],
-        };
-
-        for h in input.house.iter() {
-            graph.house.push(graph.pos_to_index(h));
-        }
-        for src in input.source.iter() {
-            graph.source.push(graph.pos_to_index(src));
-        }
-
-        graph
     }
 
+    fn add_point(&mut self, pos: &Pos) -> usize {
+        let p = pos.clone();
+        let p_idx = self.points.len();
+        self.adj.push(vec![]);
+
+        // 周りの頂点と辺を繋ぐ
+        for (i, p) in self.points.iter().enumerate() {
+            let dist = p.dist(pos);
+            if dist <= 30 {
+                let edge_index = self.edges.len();
+                self.adj[i].push(edge_index);
+                self.adj[p_idx].push(edge_index);
+                self.edges.push(Edge { u: i, v: p_idx });
+            }
+        }
+
+        self.points.push(p);
+        self.pos_index.insert(p, p_idx);
+
+        // 点のインデックスを返す
+        p_idx
+    }
+
+    #[allow(unused)]
     fn pos_to_index(&self, pos: &Pos) -> usize {
         debug_assert!(self.pos_index.contains_key(pos));
         *self.pos_index.get(pos).unwrap()
@@ -127,20 +99,33 @@ struct AnnealingState {
     to_source_paths: Vec<Vec<usize>>,
     state: State,
     graph: Graph,
+    house: Vec<usize>,
+    source: Vec<usize>,
     score: i64,
 }
 
 impl AnnealingState {
-    fn new(graph: Graph, state: State, c: i64) -> AnnealingState {
-        let mut annealing_state = AnnealingState {
+    fn new(graph: Graph, state: State, input: &Input) -> AnnealingState {
+        let mut house = vec![];
+        let mut graph = graph;
+        for h in input.house.iter() {
+            let h_idx = graph.add_point(&h);
+            house.push(h_idx);
+        }
+        let mut source = vec![];
+        for src in input.source.iter() {
+            let src_idx = graph.add_point(&src);
+            source.push(src_idx);
+        }
+        AnnealingState {
             edge_used: vec![],
             to_source_paths: vec![],
             state,
             graph,
+            house,
+            source,
             score: 0,
-        };
-        annealing_state.recalculate_all(c);
-        annealing_state
+        }
     }
 
     fn find_path_to_source(&self, point_idx: usize, c: i64) -> Vec<usize> {
@@ -148,7 +133,7 @@ impl AnnealingState {
 
         let mut best_source_index = NA;
         // 一番繋げるまでの距離が近い水源を探す
-        for src_idx in self.graph.source.iter() {
+        for src_idx in self.source.iter() {
             if best_source_index == NA || dist[*src_idx] < dist[best_source_index] {
                 best_source_index = *src_idx;
             }
@@ -163,17 +148,16 @@ impl AnnealingState {
             cur = self.graph.edges[par_edge_index].other_point(cur);
         }
         edge_path.reverse();
-
         edge_path
     }
 
     fn recalculate_all(&mut self, c: i64) {
         self.edge_used = vec![0; self.graph.edges.len()];
-        self.to_source_paths = vec![vec![]; self.graph.house.len()];
+        self.to_source_paths = vec![vec![]; self.house.len()];
         self.score = 0;
-        let house_count = self.graph.house.len();
+        let house_count = self.house.len();
         for i in 0..house_count {
-            let h_idx = self.graph.house[i];
+            let h_idx = self.house[i];
             let edge_path = self.find_path_to_source(h_idx, c);
             self.set_edge_path(i, edge_path, c);
         }
