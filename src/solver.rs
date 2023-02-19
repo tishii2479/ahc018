@@ -29,7 +29,7 @@ impl Graph {
         xs: &Vec<i64>,
         ys: &Vec<i64>,
         state: &mut State,
-        param: &Param,
+        p_test_power: &Vec<i64>,
         interactor: &Interactor,
     ) -> Graph {
         let mut points = vec![];
@@ -37,7 +37,7 @@ impl Graph {
         for x in xs.iter() {
             for y in ys.iter() {
                 let pos = Pos { x: *x, y: *y };
-                crack_point(state, &pos, &param.p_test_power, interactor);
+                crack_point(state, &pos, &p_test_power, interactor);
                 point_index.insert(pos, points.len());
                 points.push(pos);
             }
@@ -83,23 +83,65 @@ impl Graph {
     }
 
     fn edge_weight(&self, edge_index: usize, c: i64, state: &State) -> i64 {
-        let hardness = |v: usize| -> i64 {
+        let estimated_hardness = |v: usize| -> i64 {
             let p = &self.points[v];
             if state.is_broken.get(p) {
                 state.damage.get(p)
             } else {
+                // まだ壊れていなかったら、2倍の強度を想定する
                 state.damage.get(p) * 2
             }
         };
         let edge = &self.edges[edge_index];
         let dist = self.points[edge.u].dist(&self.points[edge.v]);
-        let hard_mean = (hardness(edge.u) + hardness(edge.v)) / 2;
+        let hard_mean = (estimated_hardness(edge.u) + estimated_hardness(edge.v)) / 2;
         (hard_mean + c) * dist
     }
 
     fn pos_to_index(&self, pos: &Pos) -> usize {
         debug_assert!(self.point_index.contains_key(pos));
         *self.point_index.get(pos).unwrap()
+    }
+
+    fn dijkstra(
+        &self,
+        start: usize,
+        c: i64,
+        state: &State,
+        edge_used: &Vec<i64>,
+    ) -> (Vec<i64>, Vec<usize>) {
+        let mut dist = vec![INF; self.points.len()];
+        let mut par_edge = vec![NA; self.points.len()];
+
+        // hから各頂点までの距離を計算する
+        let mut heap = BinaryHeap::new();
+        dist[start] = 0;
+        heap.push((Reverse(0), start));
+
+        // TODO: 枝刈り
+        while let Some((Reverse(d), v)) = heap.pop() {
+            if dist[v] < d {
+                continue;
+            }
+            for edge_index in self.adj[v].iter() {
+                let weight = if edge_used[*edge_index] == 0 {
+                    // 使われていない辺なら、重みはself.edge_weight
+                    self.edge_weight(*edge_index, c, state)
+                } else {
+                    // すでに使われている辺なら、重みは0
+                    0
+                };
+                let u = self.edges[*edge_index].other_point(v);
+                if dist[u] <= dist[v] + weight {
+                    continue;
+                }
+                par_edge[u] = *edge_index;
+                dist[u] = dist[v] + weight;
+                heap.push((Reverse(dist[u]), u));
+            }
+        }
+
+        (dist, par_edge)
     }
 }
 
@@ -110,14 +152,13 @@ struct AnnealingState {
 }
 
 impl AnnealingState {
-    fn new(input: &Input, graph: &Graph, state: &State, param: &Param) -> AnnealingState {
+    fn new(input: &Input, graph: &Graph, state: &State, c: i64) -> AnnealingState {
         let mut annealing_state = AnnealingState {
-            edge_used: vec![0; graph.edges.len()],
-            to_source_paths: vec![vec![]; input.house.len()],
+            edge_used: vec![],
+            to_source_paths: vec![],
             score: 0,
         };
-
-        annealing_state.calc_all(input, graph, state, param);
+        annealing_state.recalculate_all(input, graph, state, c);
         annealing_state
     }
 
@@ -127,41 +168,11 @@ impl AnnealingState {
         input: &Input,
         graph: &Graph,
         state: &State,
-        param: &Param,
+        c: i64,
     ) -> Vec<usize> {
-        let mut dist = vec![INF; graph.points.len()];
-        let mut par_edge = vec![NA; graph.points.len()];
-
-        // hから各頂点までの距離を計算する
-        let mut heap = BinaryHeap::new();
-        dist[point_idx] = 0;
-        heap.push((Reverse(0), point_idx));
-
-        // TODO: 枝刈り
-        while let Some((Reverse(d), v)) = heap.pop() {
-            if dist[v] < d {
-                continue;
-            }
-            for edge_index in graph.adj[v].iter() {
-                let weight = if self.edge_used[*edge_index] == 0 {
-                    // 使われていない辺なら、重みはgraph.edge_weight
-                    graph.edge_weight(*edge_index, param.c, state)
-                } else {
-                    // すでに使われている辺なら、重みは0
-                    0
-                };
-                let u = graph.edges[*edge_index].other_point(v);
-                if dist[u] <= dist[v] + weight {
-                    continue;
-                }
-                par_edge[u] = *edge_index;
-                dist[u] = dist[v] + weight;
-                heap.push((Reverse(dist[u]), u));
-            }
-        }
-
-        // 一番繋げるまでの距離が近い水源を探す
+        let (dist, par_edge) = graph.dijkstra(point_idx, c, state, &self.edge_used);
         let mut best_source_index = NA;
+        // 一番繋げるまでの距離が近い水源を探す
         for src in input.source.iter() {
             let point_index = graph.pos_to_index(&src);
             if best_source_index == NA || dist[point_index] < dist[best_source_index] {
@@ -182,11 +193,14 @@ impl AnnealingState {
         edge_path
     }
 
-    fn calc_all(&mut self, input: &Input, graph: &Graph, state: &State, param: &Param) {
+    fn recalculate_all(&mut self, input: &Input, graph: &Graph, state: &State, c: i64) {
+        self.edge_used = vec![0; graph.edges.len()];
+        self.to_source_paths = vec![vec![]; input.house.len()];
+        self.score = 0;
         for (i, h_pos) in input.house.iter().enumerate() {
             let point_idx = graph.pos_to_index(h_pos);
-            let edge_path = self.find_path_to_source(point_idx, input, graph, state, param);
-            self.set_edge_path(i, edge_path, graph, state, param);
+            let edge_path = self.find_path_to_source(point_idx, input, graph, state, c);
+            self.set_edge_path(i, edge_path, graph, state, c);
         }
     }
 
@@ -196,17 +210,18 @@ impl AnnealingState {
         edge_path: Vec<usize>,
         graph: &Graph,
         state: &State,
-        param: &Param,
+        c: i64,
     ) {
         for edge_index in edge_path.iter() {
             if self.edge_used[*edge_index] == 0 {
-                self.score += graph.edge_weight(*edge_index, param.c, state);
+                self.score += graph.edge_weight(*edge_index, c, state);
             }
             self.edge_used[*edge_index] += 1;
         }
         self.to_source_paths[h_idx] = edge_path;
     }
 
+    #[allow(unused)]
     fn remove_edge_path(&mut self, h_idx: usize, graph: &Graph, state: &State, param: &Param) {
         for edge_index in self.to_source_paths[h_idx].iter() {
             if self.edge_used[*edge_index] == 1 {
@@ -219,53 +234,59 @@ impl AnnealingState {
 
 pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &Param) {
     let (xs, ys) = create_grid_axis(&input, param.p_grid_size);
-    let graph = Graph::new(&xs, &ys, state, &param, interactor);
-    let mut annealing_state = AnnealingState::new(input, &graph, state, param);
+    let graph = Graph::new(&xs, &ys, state, &param.p_test_power, interactor);
+    let mut annealing_state = AnnealingState::new(input, &graph, state, param.c);
 
+    // 繋ぐ辺を最適化する
     for _ in 0..100 {
         for (i, edge) in graph.edges.iter().enumerate() {
             if annealing_state.edge_used[i] == 0 {
                 continue;
             }
-            crack_point(
-                state,
-                &graph.points[edge.u],
-                &param.p_test_power2,
-                interactor,
-            );
-            crack_point(
-                state,
-                &graph.points[edge.v],
-                &param.p_test_power2,
-                interactor,
-            );
+            for v in [edge.u, edge.v] {
+                crack_point(state, &graph.points[v], &param.p_test_power2, interactor);
+            }
         }
-        annealing_state = AnnealingState::new(input, &graph, state, param);
+        annealing_state.recalculate_all(input, &graph, state, param.c);
     }
 
-    // 壊す
+    // 辺の間を繋げる
+    let mut edges = vec![];
+    for edge_path in &mut annealing_state.to_source_paths {
+        edges.append(edge_path);
+    }
+    create_path(&edges, &graph, state, &param, interactor);
+}
+
+//
+// 辺の間を繋げる
+//
+
+fn create_path(
+    edges: &Vec<usize>,
+    graph: &Graph,
+    state: &mut State,
+    param: &Param,
+    interactor: &Interactor,
+) {
     let mut cells = vec![];
 
-    for edge_path in annealing_state.to_source_paths.iter() {
-        for edge_index in edge_path.iter() {
-            let mut p = graph.points[graph.edges[*edge_index].u];
-            let h = graph.points[graph.edges[*edge_index].v];
-            while p != h {
-                cells.push(p.clone());
-                if p.y < h.y {
-                    p.y += 1;
-                } else if p.y > h.y {
-                    p.y -= 1;
-                } else {
-                    if p.x < h.x {
-                        p.x += 1;
-                    } else if p.x > h.x {
-                        p.x -= 1;
-                    }
-                }
-            }
+    for edge_index in edges.iter() {
+        let mut p = graph.points[graph.edges[*edge_index].u];
+        let h = graph.points[graph.edges[*edge_index].v];
+        while p != h {
             cells.push(p.clone());
+            if p.y < h.y {
+                p.y += 1;
+            } else if p.y > h.y {
+                p.y -= 1;
+            } else if p.x < h.x {
+                p.x += 1;
+            } else if p.x > h.x {
+                p.x -= 1;
+            }
         }
+        cells.push(p.clone());
     }
 
     loop {
@@ -277,19 +298,18 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
             }
         }
         if let Some(cell) = cells.last() {
-            interactor.respond(cell, i64::max(20, input.c), state);
+            interactor.respond(cell, i64::max(20, param.c), state);
         } else {
             break;
         }
     }
 }
 
-fn crack_point(
-    state: &mut State,
-    pos: &Pos,
-    test_power: &Vec<i64>,
-    interactor: &Interactor,
-) -> i64 {
+//
+// ユーティリティ
+//
+
+fn crack_point(state: &mut State, pos: &Pos, test_power: &Vec<i64>, interactor: &Interactor) {
     for test_power in test_power.iter() {
         if state.is_broken.get(pos) {
             break;
@@ -299,11 +319,6 @@ fn crack_point(
             break;
         }
         interactor.respond(pos, power, state);
-    }
-    if state.is_broken.get(pos) {
-        state.damage.get(pos)
-    } else {
-        test_power.last().unwrap() * 2
     }
 }
 
