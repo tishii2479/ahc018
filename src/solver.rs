@@ -5,6 +5,34 @@ use std::{
 
 use crate::{def::*, interactor::*, param::*};
 
+pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
+    let mut state = State::new(input.n);
+    let (xs, ys) = create_grid_axis(&input, param.p_grid_size);
+    for x in xs.iter() {
+        for y in ys.iter() {
+            let pos = Pos { x: *x, y: *y };
+            state.crack_point(&pos, &param.p_test_power, interactor);
+        }
+    }
+    let graph = Graph::new(&xs, &ys, &input);
+    let mut annealing_state = AnnealingState::new(graph, state, param.c);
+
+    // 繋ぐ辺を最適化する
+    for _ in 0..100 {
+        annealing_state.update(&param, &interactor);
+    }
+
+    // 辺の間を繋げる
+    let mut edges = vec![];
+    for edge_path in &mut annealing_state.to_source_paths {
+        edges.append(edge_path);
+    }
+
+    let mut state = annealing_state.state;
+    let graph = annealing_state.graph;
+    create_path(&edges, &graph, &mut state, &param, interactor);
+}
+
 struct Edge {
     u: usize,
     v: usize,
@@ -21,27 +49,19 @@ struct Graph {
     points: Vec<Pos>,
     edges: Vec<Edge>,
     adj: Vec<Vec<usize>>,
-    point_index: HashMap<Pos, usize>,
+    pos_index: HashMap<Pos, usize>,
     house: Vec<usize>,
     source: Vec<usize>,
 }
 
 impl Graph {
-    fn new(
-        xs: &Vec<i64>,
-        ys: &Vec<i64>,
-        input: &Input,
-        state: &mut State,
-        p_test_power: &Vec<i64>,
-        interactor: &Interactor,
-    ) -> Graph {
+    fn new(xs: &Vec<i64>, ys: &Vec<i64>, input: &Input) -> Graph {
         let mut points = vec![];
-        let mut point_index = HashMap::new();
+        let mut pos_index = HashMap::new();
         for x in xs.iter() {
             for y in ys.iter() {
                 let pos = Pos { x: *x, y: *y };
-                state.crack_point(&pos, &p_test_power, interactor);
-                point_index.insert(pos, points.len());
+                pos_index.insert(pos, points.len());
                 points.push(pos);
             }
         }
@@ -55,8 +75,8 @@ impl Graph {
                     x: *x,
                     y: ys[j + 1],
                 };
-                let ui = point_index.get(&u).unwrap();
-                let vi = point_index.get(&v).unwrap();
+                let ui = pos_index.get(&u).unwrap();
+                let vi = pos_index.get(&v).unwrap();
                 adj[*ui].push(edges.len());
                 adj[*vi].push(edges.len());
                 edges.push(Edge { u: *ui, v: *vi });
@@ -69,8 +89,8 @@ impl Graph {
                     x: xs[i + 1],
                     y: *y,
                 };
-                let ui = point_index.get(&u).unwrap();
-                let vi = point_index.get(&v).unwrap();
+                let ui = pos_index.get(&u).unwrap();
+                let vi = pos_index.get(&v).unwrap();
                 adj[*ui].push(edges.len());
                 adj[*vi].push(edges.len());
                 edges.push(Edge { u: *ui, v: *vi });
@@ -81,7 +101,7 @@ impl Graph {
             points,
             edges,
             adj,
-            point_index,
+            pos_index,
             house: vec![],
             source: vec![],
         };
@@ -97,8 +117,8 @@ impl Graph {
     }
 
     fn pos_to_index(&self, pos: &Pos) -> usize {
-        debug_assert!(self.point_index.contains_key(pos));
-        *self.point_index.get(pos).unwrap()
+        debug_assert!(self.pos_index.contains_key(pos));
+        *self.pos_index.get(pos).unwrap()
     }
 }
 
@@ -111,7 +131,7 @@ struct AnnealingState {
 }
 
 impl AnnealingState {
-    fn new(input: &Input, graph: Graph, state: State, c: i64) -> AnnealingState {
+    fn new(graph: Graph, state: State, c: i64) -> AnnealingState {
         let mut annealing_state = AnnealingState {
             edge_used: vec![],
             to_source_paths: vec![],
@@ -119,19 +139,18 @@ impl AnnealingState {
             graph,
             score: 0,
         };
-        annealing_state.recalculate_all(input, c);
+        annealing_state.recalculate_all(c);
         annealing_state
     }
 
-    fn find_path_to_source(&self, point_idx: usize, input: &Input, c: i64) -> Vec<usize> {
+    fn find_path_to_source(&self, point_idx: usize, c: i64) -> Vec<usize> {
         let (dist, par_edge) = self.dijkstra(point_idx, c);
 
         let mut best_source_index = NA;
         // 一番繋げるまでの距離が近い水源を探す
-        for src in input.source.iter() {
-            let point_index = self.graph.pos_to_index(&src);
-            if best_source_index == NA || dist[point_index] < dist[best_source_index] {
-                best_source_index = point_index;
+        for src_idx in self.graph.source.iter() {
+            if best_source_index == NA || dist[*src_idx] < dist[best_source_index] {
+                best_source_index = *src_idx;
             }
         }
 
@@ -148,13 +167,14 @@ impl AnnealingState {
         edge_path
     }
 
-    fn recalculate_all(&mut self, input: &Input, c: i64) {
+    fn recalculate_all(&mut self, c: i64) {
         self.edge_used = vec![0; self.graph.edges.len()];
-        self.to_source_paths = vec![vec![]; input.house.len()];
+        self.to_source_paths = vec![vec![]; self.graph.house.len()];
         self.score = 0;
-        for (i, h_pos) in input.house.iter().enumerate() {
-            let point_idx = self.graph.pos_to_index(h_pos);
-            let edge_path = self.find_path_to_source(point_idx, input, c);
+        let house_count = self.graph.house.len();
+        for i in 0..house_count {
+            let h_idx = self.graph.house[i];
+            let edge_path = self.find_path_to_source(h_idx, c);
             self.set_edge_path(i, edge_path, c);
         }
     }
@@ -230,7 +250,7 @@ impl AnnealingState {
         (hard_mean + c) * dist
     }
 
-    fn update(&mut self, input: &Input, param: &Param, interactor: &Interactor) {
+    fn update(&mut self, param: &Param, interactor: &Interactor) {
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
                 continue;
@@ -240,37 +260,8 @@ impl AnnealingState {
                     .crack_point(&self.graph.points[v], &param.p_test_power2, interactor);
             }
         }
-        self.recalculate_all(input, param.c);
+        self.recalculate_all(param.c);
     }
-}
-
-pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
-    let mut state = State::new(input.n);
-    let (xs, ys) = create_grid_axis(&input, param.p_grid_size);
-    let graph = Graph::new(
-        &xs,
-        &ys,
-        &input,
-        &mut state,
-        &param.p_test_power,
-        interactor,
-    );
-    let mut annealing_state = AnnealingState::new(input, graph, state, param.c);
-
-    // 繋ぐ辺を最適化する
-    for _ in 0..100 {
-        annealing_state.update(&input, &param, &interactor);
-    }
-
-    // 辺の間を繋げる
-    let mut edges = vec![];
-    for edge_path in &mut annealing_state.to_source_paths {
-        edges.append(edge_path);
-    }
-
-    let mut state = annealing_state.state;
-    let graph = annealing_state.graph;
-    create_path(&edges, &graph, &mut state, &param, interactor);
 }
 
 //
