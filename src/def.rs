@@ -1,3 +1,6 @@
+pub const INF: i64 = 100_000_000_000_000;
+pub const NA: usize = 100_000_000_000_000;
+
 pub struct Input {
     pub n: usize,
     pub w: usize,
@@ -21,7 +24,7 @@ impl State {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub struct Pos {
     pub y: i64,
     pub x: i64,

@@ -1,22 +1,17 @@
-use crate::def::*;
+use crate::{def::*, util::time};
 use std::{io, io::Write};
 
-pub struct IO {
+pub struct Interactor {
     stdin: io::Stdin,
     stdout: io::Stdout,
 }
 
-impl IO {
-    pub fn new() -> IO {
-        IO {
+impl Interactor {
+    pub fn new() -> Interactor {
+        Interactor {
             stdin: io::stdin(),
             stdout: io::stdout(),
         }
-    }
-
-    pub fn output(&self, str: String) {
-        println!("{}", str);
-        self.stdout.lock().flush().unwrap();
     }
 
     pub fn read_input(&self) -> Input {
@@ -68,9 +63,28 @@ impl IO {
         }
     }
 
-    pub fn read_result(&self) -> i64 {
+    pub fn respond(&self, pos: &Pos, power: i64, state: &mut State) -> bool {
+        println!("{} {} {}", pos.y, pos.x, power);
+        self.stdout.lock().flush().unwrap();
+        state.damage.add(pos, power);
+
         let mut user_input = String::new();
         self.stdin.read_line(&mut user_input).unwrap();
-        user_input.trim().parse().unwrap()
+        let r: i64 = user_input.trim().parse().unwrap();
+
+        if r == 0 {
+            return false;
+        } else if r == 1 {
+            state.is_broken.set(pos, true);
+            return true;
+        } else if r == 2 {
+            // 終了する
+            eprintln!("elapsed seconds: {:.4}", time::elapsed_seconds());
+            std::process::exit(0);
+        } else if r == -1 {
+            panic!("Invalid operation");
+        } else {
+            panic!("Invalid result output");
+        }
     }
 }
