@@ -3,7 +3,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
 };
 
-use crate::{def::*, interactor::*, param::*, util::rnd};
+use crate::{def::*, interactor::*, param::*};
 
 struct Edge {
     u: usize,
@@ -241,25 +241,6 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
             );
         }
         annealing_state = AnnealingState::new(input, &graph, state, param);
-        // let h_idx = rnd::gen_range(0, input.k);
-        // let current_score = annealing_state.score;
-        // let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
-        // annealing_state.remove_edge_path(h_idx, &graph, state, param);
-        // let edge_path = annealing_state.find_path_to_source(
-        //     graph.pos_to_index(&input.house[h_idx]),
-        //     input,
-        //     &graph,
-        //     state,
-        //     param,
-        // );
-        // annealing_state.set_edge_path(h_idx, edge_path, &graph, state, param);
-        // let new_score = annealing_state.score;
-        // if new_score < current_score {
-        //     // 採用
-        // } else {
-        //     // ロールバック
-        //     annealing_state.set_edge_path(h_idx, current_edge_path, &graph, state, param);
-        // }
     }
 
     // 壊す

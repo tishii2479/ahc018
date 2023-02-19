@@ -94,6 +94,8 @@ if __name__ == "__main__":
     df = pd.merge(df, sample_bench_df, how="inner", on="case")
     df["relative_score"] = df.bench_score / df.score
     df["relative_score_sample"] = df.sample_bench_score / df.score
-
     print(f"Relative_score:         {df.relative_score.mean():.4f}")
     print(f"Relative_score_sample:  {df.relative_score_sample.mean():.4f}")
+
+    for col in ["c_x", "w_x", "k_x"]:
+        print(df.groupby(col).mean()["relative_score"])
