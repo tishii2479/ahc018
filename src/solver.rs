@@ -226,7 +226,7 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
     let graph = Graph::new(&xs, &ys, state, &param, interactor);
     let mut annealing_state = AnnealingState::new(input, &graph, param);
 
-    for _ in 0..1000 {
+    for _ in 0..10 {
         let h_idx = rnd::gen_range(0, input.k);
         let current_score = annealing_state.score;
         let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
@@ -245,6 +245,7 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
             // ロールバック
             annealing_state.set_edge_path(h_idx, current_edge_path, &graph, param);
         }
+        eprintln!("{}", annealing_state.score);
     }
 
     // 壊す
@@ -281,7 +282,7 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
             }
         }
         if let Some(cell) = cells.last() {
-            interactor.respond(cell, 10, state);
+            interactor.respond(cell, 100, state);
         } else {
             break;
         }
@@ -310,7 +311,7 @@ fn create_grid_axis(input: &Input, p_grid_size: i64) -> (Vec<i64>, Vec<i64>) {
         new_ps.push(*ps.last().unwrap());
 
         if ps.last().unwrap() + p_grid_size < n as i64 {
-            new_ps.push(ps.first().unwrap() + p_grid_size)
+            new_ps.push(ps.last().unwrap() + p_grid_size)
         }
         new_ps
     }

@@ -21,11 +21,10 @@ def execute_case(seed):
     cmd = f"{tester_cmd} {solver_cmd} < {input_file_path} > {output_file_path}"
     proc = subprocess.run(cmd, stderr=subprocess.PIPE, timeout=TL, shell=True)
     stderr = proc.stderr.decode("utf8")
-    score = -1
-    for line in stderr.splitlines():
-        if len(line) >= 12 and line[:12].lower() == "total cost =":
-            score = int(line.split()[-1])
-    assert score != -1
+    start = stderr.find("`")
+    end = stderr.find("`", start + 1)
+    score = int(stderr[start + 1 : end])
+    assert score != -1, f"Failed at seed: {seed}"
 
     return seed, score, N, W, K, C
 
@@ -82,7 +81,15 @@ if __name__ == "__main__":
     bench_df = pd.read_csv("log/bench.csv", index_col="case", dtype={"case": str})
     bench_df = bench_df.rename(columns={"score": "bench_score"})
 
-    df = pd.merge(bench_df, score_df, how="inner", on="case")
-    df["relative_score"] = df.bench_score / df.score
+    sample_bench_df = pd.read_csv(
+        "log/sample_bench.csv", index_col="case", dtype={"case": str}
+    )
+    sample_bench_df = sample_bench_df.rename(columns={"score": "sample_bench_score"})
 
-    print(f"Relative_score: {df.relative_score.mean()}")
+    df = pd.merge(bench_df, score_df, how="inner", on="case")
+    df = pd.merge(df, sample_bench_df, how="inner", on="case")
+    df["relative_score"] = df.bench_score / df.score
+    df["relative_score_sample"] = df.sample_bench_score / df.score
+
+    print(f"Relative_score:         {df.relative_score.mean():.4f}")
+    print(f"Relative_score_sample:  {df.relative_score_sample.mean():.4f}")

@@ -9,7 +9,7 @@ impl Param {
     pub fn new(c: i64) -> Param {
         Param {
             c,
-            p_grid_size: 20,
+            p_grid_size: 10,
             p_test_power: vec![20, 60, 100],
             p_hard_max: 200,
         }
