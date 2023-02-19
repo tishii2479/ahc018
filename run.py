@@ -76,7 +76,7 @@ def run(case_num: int):
 
 
 if __name__ == "__main__":
-    score_df = run(100)
+    score_df = run(1000)
     score_df.to_csv("log/score.csv", index=False)
 
     score_df = score_df.set_index("case")

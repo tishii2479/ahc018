@@ -1,6 +1,6 @@
 pub struct Param {
     pub c: i64,
-    pub p_grid_size: i64,
+    pub p_grid_size: usize,
     pub p_test_power: Vec<i64>,
     pub p_test_power2: Vec<i64>,
 }
