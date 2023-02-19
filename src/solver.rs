@@ -157,6 +157,7 @@ impl AnnealingState {
         dist[point_idx] = 0;
         heap.push((Reverse(0), point_idx));
 
+        // TODO: 枝刈り
         while let Some((Reverse(d), v)) = heap.pop() {
             if dist[v] < d {
                 continue;
@@ -211,7 +212,7 @@ impl AnnealingState {
         self.to_source_paths[h_idx] = edge_path;
     }
 
-    fn evaluate_remove_edge_path(&mut self, h_idx: usize, graph: &Graph, param: &Param) {
+    fn remove_edge_path(&mut self, h_idx: usize, graph: &Graph, param: &Param) {
         for edge_index in self.to_source_paths[h_idx].iter() {
             if self.edge_used[*edge_index] == 1 {
                 self.score -= graph.edge_weight(*edge_index, param.c);
@@ -230,7 +231,7 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
         let h_idx = rnd::gen_range(0, input.k);
         let current_score = annealing_state.score;
         let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
-        annealing_state.evaluate_remove_edge_path(h_idx, &graph, param);
+        annealing_state.remove_edge_path(h_idx, &graph, param);
         let edge_path = annealing_state.find_path_to_source(
             graph.pos_to_index(&input.house[h_idx]),
             input,
