@@ -5,11 +5,6 @@ use std::{
 
 use crate::{def::*, interactor::*, param::*, util::rnd};
 
-struct Point {
-    pos: Pos,
-    hard: i64,
-}
-
 struct Edge {
     u: usize,
     v: usize,
@@ -23,7 +18,7 @@ impl Edge {
 }
 
 struct Graph {
-    points: Vec<Point>,
+    points: Vec<Pos>,
     edges: Vec<Edge>,
     adj: Vec<Vec<usize>>,
     point_index: HashMap<Pos, usize>,
@@ -42,9 +37,9 @@ impl Graph {
         for x in xs.iter() {
             for y in ys.iter() {
                 let pos = Pos { x: *x, y: *y };
-                let hard = Graph::create_point(state, &pos, &param, interactor);
+                crack_point(state, &pos, &param.p_test_power, interactor);
                 point_index.insert(pos, points.len());
-                points.push(Point { pos, hard });
+                points.push(pos);
             }
         }
 
@@ -87,29 +82,12 @@ impl Graph {
         }
     }
 
-    fn edge_weight(&self, edge_index: usize, c: i64) -> i64 {
+    fn edge_weight(&self, edge_index: usize, c: i64, state: &State) -> i64 {
         let edge = &self.edges[edge_index];
-        let dist = self.points[edge.u].pos.dist(&self.points[edge.v].pos);
-        let hard_mean = (self.points[edge.u].hard + self.points[edge.v].hard) / 2;
+        let dist = self.points[edge.u].dist(&self.points[edge.v]);
+        let hard_mean =
+            (state.damage.get(&self.points[edge.u]) + state.damage.get(&self.points[edge.v])) / 2;
         (hard_mean + c) * dist
-    }
-
-    fn create_point(state: &mut State, pos: &Pos, param: &Param, interactor: &Interactor) -> i64 {
-        for test_power in param.p_test_power.iter() {
-            if state.is_broken.get(pos) {
-                break;
-            }
-            let power = test_power - state.damage.get(pos);
-            if power <= 0 {
-                continue;
-            }
-            interactor.respond(pos, power, state);
-        }
-        if state.is_broken.get(pos) {
-            state.damage.get(pos)
-        } else {
-            param.p_hard_max
-        }
     }
 
     fn pos_to_index(&self, pos: &Pos) -> usize {
@@ -125,21 +103,15 @@ struct AnnealingState {
 }
 
 impl AnnealingState {
-    fn new(input: &Input, graph: &Graph, param: &Param) -> AnnealingState {
-        let mut state = AnnealingState {
+    fn new(input: &Input, graph: &Graph, state: &State, param: &Param) -> AnnealingState {
+        let mut annealing_state = AnnealingState {
             edge_used: vec![0; graph.edges.len()],
             to_source_paths: vec![vec![]; input.house.len()],
             score: 0,
         };
 
-        // TODO: 初期解を作る
-        for (i, h_pos) in input.house.iter().enumerate() {
-            let point_idx = graph.pos_to_index(h_pos);
-            let edge_path = state.find_path_to_source(point_idx, input, graph, param);
-            state.set_edge_path(i, edge_path, graph, param);
-        }
-
-        state
+        annealing_state.calc_all(input, graph, state, param);
+        annealing_state
     }
 
     fn find_path_to_source(
@@ -147,6 +119,7 @@ impl AnnealingState {
         point_idx: usize,
         input: &Input,
         graph: &Graph,
+        state: &State,
         param: &Param,
     ) -> Vec<usize> {
         let mut dist = vec![INF; graph.points.len()];
@@ -165,7 +138,7 @@ impl AnnealingState {
             for edge_index in graph.adj[v].iter() {
                 let weight = if self.edge_used[*edge_index] == 0 {
                     // 使われていない辺なら、重みはgraph.edge_weight
-                    graph.edge_weight(*edge_index, param.c)
+                    graph.edge_weight(*edge_index, param.c, state)
                 } else {
                     // すでに使われている辺なら、重みは0
                     0
@@ -202,20 +175,35 @@ impl AnnealingState {
         edge_path
     }
 
-    fn set_edge_path(&mut self, h_idx: usize, edge_path: Vec<usize>, graph: &Graph, param: &Param) {
+    fn calc_all(&mut self, input: &Input, graph: &Graph, state: &State, param: &Param) {
+        for (i, h_pos) in input.house.iter().enumerate() {
+            let point_idx = graph.pos_to_index(h_pos);
+            let edge_path = self.find_path_to_source(point_idx, input, graph, state, param);
+            self.set_edge_path(i, edge_path, graph, state, param);
+        }
+    }
+
+    fn set_edge_path(
+        &mut self,
+        h_idx: usize,
+        edge_path: Vec<usize>,
+        graph: &Graph,
+        state: &State,
+        param: &Param,
+    ) {
         for edge_index in edge_path.iter() {
             if self.edge_used[*edge_index] == 0 {
-                self.score += graph.edge_weight(*edge_index, param.c);
+                self.score += graph.edge_weight(*edge_index, param.c, state);
             }
             self.edge_used[*edge_index] += 1;
         }
         self.to_source_paths[h_idx] = edge_path;
     }
 
-    fn remove_edge_path(&mut self, h_idx: usize, graph: &Graph, param: &Param) {
+    fn remove_edge_path(&mut self, h_idx: usize, graph: &Graph, state: &State, param: &Param) {
         for edge_index in self.to_source_paths[h_idx].iter() {
             if self.edge_used[*edge_index] == 1 {
-                self.score -= graph.edge_weight(*edge_index, param.c);
+                self.score -= graph.edge_weight(*edge_index, param.c, state);
             }
             self.edge_used[*edge_index] -= 1;
         }
@@ -225,28 +213,46 @@ impl AnnealingState {
 pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &Param) {
     let (xs, ys) = create_grid_axis(&input, param.p_grid_size);
     let graph = Graph::new(&xs, &ys, state, &param, interactor);
-    let mut annealing_state = AnnealingState::new(input, &graph, param);
+    let mut annealing_state = AnnealingState::new(input, &graph, state, param);
 
-    for _ in 0..10 {
+    for _ in 0..1000 {
+        // for (i, edge) in graph.edges.iter().enumerate() {
+        //     if annealing_state.edge_used[i] == 0 {
+        //         continue;
+        //     }
+        //     crack_point(
+        //         state,
+        //         &graph.points[edge.u],
+        //         &param.p_test_power2,
+        //         interactor,
+        //     );
+        //     crack_point(
+        //         state,
+        //         &graph.points[edge.v],
+        //         &param.p_test_power2,
+        //         interactor,
+        //     );
+        // }
+        // annealing_state = AnnealingState::new(input, &graph, state, param);
         let h_idx = rnd::gen_range(0, input.k);
         let current_score = annealing_state.score;
         let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
-        annealing_state.remove_edge_path(h_idx, &graph, param);
+        annealing_state.remove_edge_path(h_idx, &graph, state, param);
         let edge_path = annealing_state.find_path_to_source(
             graph.pos_to_index(&input.house[h_idx]),
             input,
             &graph,
+            state,
             param,
         );
-        annealing_state.set_edge_path(h_idx, edge_path, &graph, param);
+        annealing_state.set_edge_path(h_idx, edge_path, &graph, state, param);
         let new_score = annealing_state.score;
         if new_score < current_score {
             // 採用
         } else {
             // ロールバック
-            annealing_state.set_edge_path(h_idx, current_edge_path, &graph, param);
+            annealing_state.set_edge_path(h_idx, current_edge_path, &graph, state, param);
         }
-        eprintln!("{}", annealing_state.score);
     }
 
     // 壊す
@@ -254,8 +260,8 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
 
     for edge_path in annealing_state.to_source_paths.iter() {
         for edge_index in edge_path.iter() {
-            let mut p = graph.points[graph.edges[*edge_index].u].pos;
-            let h = graph.points[graph.edges[*edge_index].v].pos;
+            let mut p = graph.points[graph.edges[*edge_index].u];
+            let h = graph.points[graph.edges[*edge_index].v];
             while p != h {
                 cells.push(p.clone());
                 if p.y < h.y {
@@ -287,6 +293,29 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
         } else {
             break;
         }
+    }
+}
+
+fn crack_point(
+    state: &mut State,
+    pos: &Pos,
+    test_power: &Vec<i64>,
+    interactor: &Interactor,
+) -> i64 {
+    for test_power in test_power.iter() {
+        if state.is_broken.get(pos) {
+            break;
+        }
+        let power = test_power - state.damage.get(pos);
+        if power <= 0 {
+            break;
+        }
+        interactor.respond(pos, power, state);
+    }
+    if state.is_broken.get(pos) {
+        state.damage.get(pos)
+    } else {
+        test_power.last().unwrap() * 2
     }
 }
 
