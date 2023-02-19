@@ -83,10 +83,17 @@ impl Graph {
     }
 
     fn edge_weight(&self, edge_index: usize, c: i64, state: &State) -> i64 {
+        let hardness = |v: usize| -> i64 {
+            let p = &self.points[v];
+            if state.is_broken.get(p) {
+                state.damage.get(p)
+            } else {
+                state.damage.get(p) * 2
+            }
+        };
         let edge = &self.edges[edge_index];
         let dist = self.points[edge.u].dist(&self.points[edge.v]);
-        let hard_mean =
-            (state.damage.get(&self.points[edge.u]) + state.damage.get(&self.points[edge.v])) / 2;
+        let hard_mean = (hardness(edge.u) + hardness(edge.v)) / 2;
         (hard_mean + c) * dist
     }
 
@@ -215,44 +222,44 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
     let graph = Graph::new(&xs, &ys, state, &param, interactor);
     let mut annealing_state = AnnealingState::new(input, &graph, state, param);
 
-    for _ in 0..1000 {
-        // for (i, edge) in graph.edges.iter().enumerate() {
-        //     if annealing_state.edge_used[i] == 0 {
-        //         continue;
-        //     }
-        //     crack_point(
-        //         state,
-        //         &graph.points[edge.u],
-        //         &param.p_test_power2,
-        //         interactor,
-        //     );
-        //     crack_point(
-        //         state,
-        //         &graph.points[edge.v],
-        //         &param.p_test_power2,
-        //         interactor,
-        //     );
-        // }
-        // annealing_state = AnnealingState::new(input, &graph, state, param);
-        let h_idx = rnd::gen_range(0, input.k);
-        let current_score = annealing_state.score;
-        let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
-        annealing_state.remove_edge_path(h_idx, &graph, state, param);
-        let edge_path = annealing_state.find_path_to_source(
-            graph.pos_to_index(&input.house[h_idx]),
-            input,
-            &graph,
-            state,
-            param,
-        );
-        annealing_state.set_edge_path(h_idx, edge_path, &graph, state, param);
-        let new_score = annealing_state.score;
-        if new_score < current_score {
-            // 採用
-        } else {
-            // ロールバック
-            annealing_state.set_edge_path(h_idx, current_edge_path, &graph, state, param);
+    for _ in 0..100 {
+        for (i, edge) in graph.edges.iter().enumerate() {
+            if annealing_state.edge_used[i] == 0 {
+                continue;
+            }
+            crack_point(
+                state,
+                &graph.points[edge.u],
+                &param.p_test_power2,
+                interactor,
+            );
+            crack_point(
+                state,
+                &graph.points[edge.v],
+                &param.p_test_power2,
+                interactor,
+            );
         }
+        annealing_state = AnnealingState::new(input, &graph, state, param);
+        // let h_idx = rnd::gen_range(0, input.k);
+        // let current_score = annealing_state.score;
+        // let current_edge_path = annealing_state.to_source_paths[h_idx].clone();
+        // annealing_state.remove_edge_path(h_idx, &graph, state, param);
+        // let edge_path = annealing_state.find_path_to_source(
+        //     graph.pos_to_index(&input.house[h_idx]),
+        //     input,
+        //     &graph,
+        //     state,
+        //     param,
+        // );
+        // annealing_state.set_edge_path(h_idx, edge_path, &graph, state, param);
+        // let new_score = annealing_state.score;
+        // if new_score < current_score {
+        //     // 採用
+        // } else {
+        //     // ロールバック
+        //     annealing_state.set_edge_path(h_idx, current_edge_path, &graph, state, param);
+        // }
     }
 
     // 壊す

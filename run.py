@@ -19,14 +19,18 @@ def execute_case(seed):
         N, W, K, C = map(int, f.readline().split())
 
     cmd = f"{tester_cmd} {solver_cmd} < {input_file_path} > {output_file_path}"
-    proc = subprocess.run(cmd, stderr=subprocess.PIPE, timeout=TL, shell=True)
-    stderr = proc.stderr.decode("utf8")
-    start = stderr.find("`")
-    end = stderr.find("`", start + 1)
-    score = int(stderr[start + 1 : end])
-    assert score != -1, f"Failed at seed: {seed}"
+    while True:
+        proc = subprocess.run(cmd, stderr=subprocess.PIPE, timeout=TL, shell=True)
+        stderr = proc.stderr.decode("utf8")
+        start = stderr.find("`")
+        end = stderr.find("`", start + 1)
+        if stderr[start + 1 : end].isnumeric() is False:
+            print(f"failed at seed: {seed} {stderr}")
+            continue
+        score = int(stderr[start + 1 : end])
+        assert score != -1, f"Failed at seed: {seed}"
 
-    return seed, score, N, W, K, C
+        return seed, score, N, W, K, C
 
 
 def run(case_num: int):
