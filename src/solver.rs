@@ -277,7 +277,7 @@ pub fn solve(state: &mut State, input: &Input, interactor: &Interactor, param: &
             }
         }
         if let Some(cell) = cells.last() {
-            interactor.respond(cell, 100, state);
+            interactor.respond(cell, i64::max(20, input.c), state);
         } else {
             break;
         }
