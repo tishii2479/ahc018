@@ -163,6 +163,38 @@ impl Graph {
         }
     }
 
+    fn dijkstra<T>(&self, start: usize, edge_weight: T) -> (Vec<i64>, Vec<usize>)
+    where
+        T: Fn(usize) -> i64,
+    {
+        let mut dist = vec![INF; self.points.len()];
+        let mut par_edge = vec![NA; self.points.len()];
+
+        // hから各頂点までの距離を計算する
+        let mut heap = BinaryHeap::new();
+        dist[start] = 0;
+        heap.push((Reverse(0), start));
+
+        // TODO: 枝刈り
+        while let Some((Reverse(d), v)) = heap.pop() {
+            if dist[v] < d {
+                continue;
+            }
+            for edge_index in self.adj[v].iter() {
+                let weight = edge_weight(*edge_index);
+                let u = self.edges[*edge_index].other_point(v);
+                if dist[u] <= dist[v] + weight {
+                    continue;
+                }
+                par_edge[u] = *edge_index;
+                dist[u] = dist[v] + weight;
+                heap.push((Reverse(dist[u]), u));
+            }
+        }
+
+        (dist, par_edge)
+    }
+
     fn should_add_point(&self, pos: &Pos) -> bool {
         // 距離が一定以下の場所には点を打たなくて良い
         for p in self.points.iter() {
@@ -215,7 +247,18 @@ impl AnnealingState {
     }
 
     fn find_path_to_source(&self, point_idx: usize, c: i64) -> Vec<usize> {
-        let (dist, par_edge) = self.dijkstra(point_idx, c);
+        let edge_weight = {
+            |edge_index: usize| {
+                if self.edge_used[edge_index] == 0 {
+                    // 使われていない辺なら、重みはgraph.edge_weight
+                    self.edge_weight(edge_index, c)
+                } else {
+                    // すでに使われている辺なら、重みは0
+                    0
+                }
+            }
+        };
+        let (dist, par_edge) = self.graph.dijkstra(point_idx, edge_weight);
 
         let mut best_source_index = NA;
         // 一番繋げるまでの距離が近い水源を探す
@@ -269,41 +312,6 @@ impl AnnealingState {
             }
             self.edge_used[*edge_index] -= 1;
         }
-    }
-
-    fn dijkstra(&self, start: usize, c: i64) -> (Vec<i64>, Vec<usize>) {
-        let mut dist = vec![INF; self.graph.points.len()];
-        let mut par_edge = vec![NA; self.graph.points.len()];
-
-        // hから各頂点までの距離を計算する
-        let mut heap = BinaryHeap::new();
-        dist[start] = 0;
-        heap.push((Reverse(0), start));
-
-        // TODO: 枝刈り
-        while let Some((Reverse(d), v)) = heap.pop() {
-            if dist[v] < d {
-                continue;
-            }
-            for edge_index in self.graph.adj[v].iter() {
-                let weight = if self.edge_used[*edge_index] == 0 {
-                    // 使われていない辺なら、重みはgraph.edge_weight
-                    self.edge_weight(*edge_index, c)
-                } else {
-                    // すでに使われている辺なら、重みは0
-                    0
-                };
-                let u = self.graph.edges[*edge_index].other_point(v);
-                if dist[u] <= dist[v] + weight {
-                    continue;
-                }
-                par_edge[u] = *edge_index;
-                dist[u] = dist[v] + weight;
-                heap.push((Reverse(dist[u]), u));
-            }
-        }
-
-        (dist, par_edge)
     }
 
     fn edge_weight(&self, edge_index: usize, c: i64) -> i64 {
