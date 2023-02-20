@@ -5,22 +5,24 @@ use std::{
 
 use crate::{def::*, interactor::*, param::*, util::rnd};
 
+fn add_point(
+    pos: &Pos,
+    state: &mut State,
+    graph: &mut Graph,
+    param: &Param,
+    interactor: &Interactor,
+) -> bool {
+    if !pos.is_valid() || !graph.should_add_point(&pos) {
+        return false;
+    }
+    state.crack_point(&pos, &param.p_test_power, interactor);
+    graph.add_point(&pos);
+    return true;
+}
+
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
-    fn add_point(
-        pos: &Pos,
-        state: &mut State,
-        graph: &mut Graph,
-        param: &Param,
-        interactor: &Interactor,
-    ) {
-        if !pos.is_valid() || !graph.should_add_point(&pos) {
-            return;
-        }
-        state.crack_point(&pos, &param.p_test_power, interactor);
-        graph.add_point(&pos);
-    }
     for h in input.house.iter() {
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
@@ -69,6 +71,8 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     for t in 0..100 {
         annealing_state.update(&param, interactor, t);
     }
+
+    println!("# end optimize");
 
     // 辺の間を繋げる
     let mut edges = vec![];
@@ -292,30 +296,15 @@ impl AnnealingState {
     }
 
     fn update(&mut self, param: &Param, interactor: &Interactor, _iteration: usize) {
-        let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
                 continue;
             }
             for v in [edge.u, edge.v] {
                 let p = &self.graph.points[v];
-                let c = Pos {
-                    x: p.x + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
-                    y: p.y + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
-                };
-                add_pos.push(c);
                 self.state.crack_point(&p, &param.p_test_power2, interactor);
             }
         }
-        // if iteration > 0 && iteration % 10 == 0 {
-        //     for p in add_pos.iter() {
-        //         if !p.is_valid() || !self.graph.should_add_point(p) {
-        //             continue;
-        //         }
-        //         self.state.crack_point(p, &param.p_test_power, interactor);
-        //         self.graph.add_point(p);
-        //     }
-        // }
         self.recalculate_all(param.c);
     }
 }
