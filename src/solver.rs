@@ -17,7 +17,7 @@ fn add_point(
     state: &mut State,
     graph: &mut Graph,
     param: &Param,
-    interactor: &Interactor,
+    interactor: &mut Interactor,
 ) -> bool {
     if !pos.is_valid() || !graph.should_add_point(&pos) {
         return false;
@@ -27,7 +27,7 @@ fn add_point(
     return true;
 }
 
-pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
+pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
     for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
@@ -330,13 +330,13 @@ impl AnnealingState {
         (hard_mean + c) * dist
     }
 
-    fn update(&mut self, param: &Param, interactor: &Interactor, _iteration: usize) {
+    fn update(&mut self, param: &Param, interactor: &mut Interactor, _iteration: usize) {
         let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
                 continue;
             }
-            for v in [edge.u, edge.v] {
+            for v in vec![edge.u, edge.v] {
                 let p = &self.graph.points[v];
                 self.state.crack_point(&p, &param.p_test_power2, interactor);
             }
@@ -389,7 +389,7 @@ fn create_path(
     graph: &Graph,
     state: &mut State,
     param: &Param,
-    interactor: &Interactor,
+    interactor: &mut Interactor,
 ) {
     let mut cells = vec![];
 

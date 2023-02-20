@@ -29,7 +29,7 @@ impl State {
         }
     }
 
-    pub fn crack_point(&mut self, pos: &Pos, test_power: &Vec<i64>, interactor: &Interactor) {
+    pub fn crack_point(&mut self, pos: &Pos, test_power: &Vec<i64>, interactor: &mut Interactor) {
         for test_power in test_power.iter() {
             if self.is_broken.get(pos) {
                 break;
