@@ -2,6 +2,7 @@ use crate::interactor::Interactor;
 
 pub const INF: i64 = 100_000_000_000_000;
 pub const NA: usize = 100_000_000_000_000;
+pub const N: usize = 200;
 
 pub struct Input {
     pub n: usize,
@@ -48,6 +49,10 @@ pub struct Pos {
 impl Pos {
     pub fn dist(&self, to: &Pos) -> i64 {
         i64::abs(to.y - self.y) + i64::abs(to.x - self.x)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.x >= 0 && self.y >= 0 && self.x < 200 && self.y < 200
     }
 }
 

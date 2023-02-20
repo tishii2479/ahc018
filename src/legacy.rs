@@ -87,8 +87,8 @@ fn create_grid_axis(input: &Input, p_grid_size: i64) -> (Vec<i64>, Vec<i64>) {
     xs.sort();
     ys.sort();
 
-    let new_xs = create_equally_spaced_axis(&xs, p_grid_size, input.n);
-    let new_ys = create_equally_spaced_axis(&ys, p_grid_size, input.n);
+    let new_xs = create_equally_spaced_axis(&xs, p_grid_size, N);
+    let new_ys = create_equally_spaced_axis(&ys, p_grid_size, N);
 
     (new_xs, new_ys)
 }

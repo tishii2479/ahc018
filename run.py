@@ -80,7 +80,6 @@ if __name__ == "__main__":
     score_df.to_csv("log/score.csv", index=False)
 
     score_df = score_df.set_index("case")
-    score_df = score_df[["score"]]
 
     bench_df = pd.read_csv("log/bench.csv", index_col="case", dtype={"case": str})
     bench_df = bench_df.rename(columns={"score": "bench_score"})
@@ -90,6 +89,11 @@ if __name__ == "__main__":
     )
     sample_bench_df = sample_bench_df.rename(columns={"score": "sample_bench_score"})
 
+    bench_df = bench_df[bench_df.columns.difference(score_df.columns)]
+    sample_bench_df = sample_bench_df[
+        sample_bench_df.columns.difference(score_df.columns)
+    ]
+
     df = pd.merge(bench_df, score_df, how="inner", on="case")
     df = pd.merge(df, sample_bench_df, how="inner", on="case")
     df["relative_score"] = df.bench_score / df.score
@@ -97,5 +101,7 @@ if __name__ == "__main__":
     print(f"Relative_score:         {df.relative_score.mean():.4f}")
     print(f"Relative_score_sample:  {df.relative_score_sample.mean():.4f}")
 
-    for col in ["c_x", "w_x", "k_x"]:
+    print(df.sort_values("relative_score"))
+
+    for col in ["c", "w", "k"]:
         print(df.groupby(col).mean()["relative_score"])

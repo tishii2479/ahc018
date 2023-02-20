@@ -6,14 +6,65 @@ use std::{
 use crate::{def::*, interactor::*, param::*, util::rnd};
 
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
-    let mut state = State::new(input.n);
+    let mut state = State::new(N);
     let mut graph = Graph::new();
-    for x in (param.p_grid_size / 2..input.n).step_by(param.p_grid_size) {
-        for y in (param.p_grid_size / 2..input.n).step_by(param.p_grid_size) {
+    for h in input.house.iter() {
+        for dy in (-100..=100).step_by(20) {
+            let pos = Pos {
+                x: h.x as i64,
+                y: h.y as i64 + dy,
+            };
+            if !pos.is_valid() || !graph.should_add_point(&pos) {
+                continue;
+            }
+            state.crack_point(&pos, &param.p_test_power, interactor);
+            graph.add_point(&pos);
+        }
+        for dx in (-100..=100).step_by(20) {
+            let pos = Pos {
+                x: h.x as i64 + dx,
+                y: h.y as i64,
+            };
+            if !pos.is_valid() || !graph.should_add_point(&pos) {
+                continue;
+            }
+            state.crack_point(&pos, &param.p_test_power, interactor);
+            graph.add_point(&pos);
+        }
+    }
+    for h in input.source.iter() {
+        for dy in (-100..=100).step_by(20) {
+            let pos = Pos {
+                x: h.x as i64,
+                y: h.y as i64 + dy,
+            };
+            if !pos.is_valid() || !graph.should_add_point(&pos) {
+                continue;
+            }
+            state.crack_point(&pos, &param.p_test_power, interactor);
+            graph.add_point(&pos);
+        }
+        for dx in (-100..=100).step_by(20) {
+            let pos = Pos {
+                x: h.x as i64 + dx,
+                y: h.y as i64,
+            };
+            if !pos.is_valid() || !graph.should_add_point(&pos) {
+                continue;
+            }
+            state.crack_point(&pos, &param.p_test_power, interactor);
+            graph.add_point(&pos);
+        }
+    }
+    for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
+        for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: x as i64,
                 y: y as i64,
             };
+            if !pos.is_valid() || !graph.should_add_point(&pos) {
+                continue;
+            }
             state.crack_point(&pos, &param.p_test_power, interactor);
             graph.add_point(&pos);
         }
@@ -247,7 +298,7 @@ impl AnnealingState {
         let edge = &self.graph.edges[edge_index];
         let dist = self.graph.points[edge.u].dist(&self.graph.points[edge.v]);
         let hard_mean = (estimated_hardness(edge.u) + estimated_hardness(edge.v)) / 2;
-        let dist_penalty = f64::max(1., (dist as f64 / 20.) * (dist as f64 / 20.));
+        let dist_penalty = f64::max(1., dist as f64 / 20.);
         ((((hard_mean + c) * dist) as f64) * dist_penalty) as i64
     }
 
@@ -257,20 +308,19 @@ impl AnnealingState {
             if self.edge_used[i] == 0 {
                 continue;
             }
-            let (u, v) = (self.graph.points[edge.u], self.graph.points[edge.v]);
-            let c = Pos {
-                x: (u.x + v.x) / 2 + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
-                y: (u.y + v.y) / 2 + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
-            };
-            add_pos.push(c);
             for v in [edge.u, edge.v] {
-                self.state
-                    .crack_point(&self.graph.points[v], &param.p_test_power2, interactor);
+                let p = &self.graph.points[v];
+                let c = Pos {
+                    x: p.x + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
+                    y: p.y + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
+                };
+                add_pos.push(c);
+                self.state.crack_point(&p, &param.p_test_power2, interactor);
             }
         }
-        if iteration > 10 {
+        if iteration > 0 && iteration % 10 == 0 {
             for p in add_pos.iter() {
-                if p.x < 0 || p.y < 0 || p.x >= 200 || p.y >= 200 {
+                if !p.is_valid() {
                     continue;
                 }
                 if self.graph.exist_point(p) || !self.graph.should_add_point(p) {
@@ -335,12 +385,13 @@ fn create_path(
             let mut div = 0.;
             for dx in -5..=5 {
                 for dy in -5..=5 {
-                    let x = dx + cell.x;
-                    let y = dy + cell.y;
-                    if x < 0 || y < 0 || x >= 200 || y >= 200 {
+                    let p = Pos {
+                        x: dx + cell.x,
+                        y: dy + cell.y,
+                    };
+                    if !p.is_valid() {
                         continue;
                     }
-                    let p = Pos { x, y };
                     if !state.is_broken.get(&p) {
                         continue;
                     }
