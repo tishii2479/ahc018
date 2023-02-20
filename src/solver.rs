@@ -3,7 +3,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
 };
 
-use crate::{def::*, interactor::*, param::*};
+use crate::{def::*, interactor::*, param::*, util::rnd::gen_range};
 
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(input.n);
@@ -22,8 +22,8 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     annealing_state.recalculate_all(param.c);
 
     // 繋ぐ辺を最適化する
-    for _ in 0..100 {
-        annealing_state.update(&param, &interactor);
+    for t in 0..100 {
+        annealing_state.update(&param, &interactor, t);
     }
 
     // 辺の間を繋げる
@@ -87,6 +87,20 @@ impl Graph {
 
         // 点のインデックスを返す
         p_idx
+    }
+
+    fn should_add_point(&self, pos: &Pos) -> bool {
+        // 距離が一定以下の場所には点を打たなくて良い
+        for p in self.points.iter() {
+            if p.dist(pos) <= 10 {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    fn exist_point(&self, pos: &Pos) -> bool {
+        self.pos_index.contains_key(pos)
     }
 
     #[allow(unused)]
@@ -233,17 +247,37 @@ impl AnnealingState {
         let edge = &self.graph.edges[edge_index];
         let dist = self.graph.points[edge.u].dist(&self.graph.points[edge.v]);
         let hard_mean = (estimated_hardness(edge.u) + estimated_hardness(edge.v)) / 2;
-        (hard_mean + c) * dist
+        let dist_penalty = f64::max(1., (dist as f64 / 20.) * (dist as f64 / 20.));
+        ((((hard_mean + c) * dist) as f64) * dist_penalty) as i64
     }
 
-    fn update(&mut self, param: &Param, interactor: &Interactor) {
+    fn update(&mut self, param: &Param, interactor: &Interactor, iteration: usize) {
+        let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
                 continue;
             }
+            let (u, v) = (self.graph.points[edge.u], self.graph.points[edge.v]);
+            let c = Pos {
+                x: (u.x + v.x) / 2 + 10 * if gen_range(0, 2) == 0 { 1 } else { -1 },
+                y: (u.y + v.y) / 2 + 10 * if gen_range(0, 2) == 0 { 1 } else { -1 },
+            };
+            add_pos.push(c);
             for v in [edge.u, edge.v] {
                 self.state
                     .crack_point(&self.graph.points[v], &param.p_test_power2, interactor);
+            }
+        }
+        if iteration > 10 {
+            for p in add_pos.iter() {
+                if p.x < 0 || p.y < 0 || p.x >= 200 || p.y >= 200 {
+                    continue;
+                }
+                if self.graph.exist_point(p) || !self.graph.should_add_point(p) {
+                    continue;
+                }
+                self.state.crack_point(p, &param.p_test_power, interactor);
+                self.graph.add_point(p);
             }
         }
         self.recalculate_all(param.c);
@@ -268,14 +302,18 @@ fn create_path(
         let h = graph.points[graph.edges[*edge_index].v];
         while p != h {
             cells.push(p.clone());
-            if p.y < h.y {
-                p.y += 1;
-            } else if p.y > h.y {
-                p.y -= 1;
-            } else if p.x < h.x {
-                p.x += 1;
-            } else if p.x > h.x {
-                p.x -= 1;
+            if i64::abs(p.y - h.y) > i64::abs(p.x - h.x) {
+                if p.y < h.y {
+                    p.y += 1;
+                } else if p.y > h.y {
+                    p.y -= 1;
+                }
+            } else {
+                if p.x < h.x {
+                    p.x += 1;
+                } else if p.x > h.x {
+                    p.x -= 1;
+                }
             }
         }
         cells.push(p.clone());
