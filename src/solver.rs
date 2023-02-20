@@ -3,7 +3,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
 };
 
-use crate::{def::*, interactor::*, param::*, util::rnd::gen_range};
+use crate::{def::*, interactor::*, param::*, util::rnd};
 
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(input.n);
@@ -259,8 +259,8 @@ impl AnnealingState {
             }
             let (u, v) = (self.graph.points[edge.u], self.graph.points[edge.v]);
             let c = Pos {
-                x: (u.x + v.x) / 2 + 10 * if gen_range(0, 2) == 0 { 1 } else { -1 },
-                y: (u.y + v.y) / 2 + 10 * if gen_range(0, 2) == 0 { 1 } else { -1 },
+                x: (u.x + v.x) / 2 + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
+                y: (u.y + v.y) / 2 + 10 * if rnd::gen_range(0, 2) == 0 { 1 } else { -1 },
             };
             add_pos.push(c);
             for v in [edge.u, edge.v] {
@@ -319,6 +319,8 @@ fn create_path(
         cells.push(p.clone());
     }
 
+    rnd::shuffle(&mut cells);
+
     loop {
         while let Some(cell) = cells.last() {
             if state.is_broken.get(cell) {
@@ -328,7 +330,40 @@ fn create_path(
             }
         }
         if let Some(cell) = cells.last() {
-            interactor.respond(cell, i64::max(20, param.c), state);
+            // 周囲の壊れているセルから硬さを予測する
+            let mut sum = 0.;
+            let mut div = 0.;
+            for dx in -5..=5 {
+                for dy in -5..=5 {
+                    let x = dx + cell.x;
+                    let y = dy + cell.y;
+                    if x < 0 || y < 0 || x >= 200 || y >= 200 {
+                        continue;
+                    }
+                    let p = Pos { x, y };
+                    if !state.is_broken.get(&p) {
+                        continue;
+                    }
+                    let w = 1. / p.dist(cell) as f64;
+                    sum += state.damage.get(&p) as f64 * w;
+                    div += w;
+                }
+            }
+
+            let power = if div == 0. {
+                i64::max(10, param.c)
+            } else {
+                let mean = sum / div;
+                let estimated = (mean * 0.75) as i64;
+                let to_estimated = i64::min(5000, estimated - state.damage.get(&cell));
+                if to_estimated <= 0 {
+                    i64::max(10, param.c)
+                } else {
+                    to_estimated
+                }
+            };
+
+            interactor.respond(cell, power, state);
         } else {
             break;
         }
