@@ -30,38 +30,6 @@ fn add_point(
 pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
-    for h in input.house.iter() {
-        for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
-            let pos = Pos {
-                x: h.x as i64,
-                y: y as i64,
-            };
-            add_point(&pos, &mut state, &mut graph, param, interactor);
-        }
-        for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
-            let pos = Pos {
-                x: x as i64,
-                y: h.y as i64,
-            };
-            add_point(&pos, &mut state, &mut graph, param, interactor);
-        }
-    }
-    for h in input.source.iter() {
-        for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
-            let pos = Pos {
-                x: h.x as i64,
-                y: y as i64,
-            };
-            add_point(&pos, &mut state, &mut graph, param, interactor);
-        }
-        for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
-            let pos = Pos {
-                x: x as i64,
-                y: h.y as i64,
-            };
-            add_point(&pos, &mut state, &mut graph, param, interactor);
-        }
-    }
     for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
@@ -373,9 +341,7 @@ impl AnnealingState {
         }
         if _iteration > 10 {
             for p in add_pos.iter() {
-                if add_point(p, &mut self.state, &mut self.graph, param, interactor) {
-                    eprintln!("added: {:?}", p);
-                }
+                add_point(p, &mut self.state, &mut self.graph, param, interactor);
             }
         }
         self.recalculate_all(param.c);

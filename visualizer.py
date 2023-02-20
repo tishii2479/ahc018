@@ -7,6 +7,10 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
     points = []
     edges = []
     paths = []
+    s = []
+    houses = []
+    sources = []
+
     with open(graph_file, "r") as f:
         n, m = map(int, f.readline().strip().split())
         for _ in range(n):
@@ -21,27 +25,43 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
             p = list(map(int, f.readline().strip().split()))
             paths.append(p)
 
-    # with open(input_file: str) -> None:
+    with open(input_file, "r") as f:
+        n, w, k, c = map(int, f.readline().strip().split())
+
+        for _ in range(N):
+            s.append(list(map(int, f.readline().strip().split())))
+
+        for _ in range(w):
+            y, x = map(int, f.readline().strip().split())
+            houses.append((y, x))
+
+        for _ in range(k):
+            y, x = map(int, f.readline().strip().split())
+            sources.append((y, x))
 
     im = Image.new("RGB", (N * D, N * D), (255, 255, 255))
     draw = ImageDraw.Draw(im)
+    for y in range(N):
+        for x in range(N):
+            o = 255 - int(s[y][x] / 5000 * 255)
+            draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, o, 255))
 
     for py, px in points:
         draw.ellipse(
             (
-                D * px - D / 2,
-                D * py - D / 2,
-                D * (px + 1) - D / 2,
-                D * (py + 1) - D / 2,
+                D * (px - 0.5),
+                D * (py - 0.5),
+                D * (px + 0.5),
+                D * (py + 0.5),
             ),
-            fill=(255, 0, 0),
+            fill=(60, 60, 60),
         )
 
     for u, v, w in edges:
         pu, pv = points[u], points[v]
         draw.line(
             (D * pu[1], D * pu[0], D * pv[1], D * pv[0]),
-            fill=(180, 0, 0),
+            fill=(60, 60, 60),
             width=3,
         )
 
@@ -52,11 +72,36 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
             draw.line(
                 (D * pu[1], D * pu[0], D * pv[1], D * pv[0]),
                 fill=(255, 0, 0),
-                width=10,
+                width=5,
             )
+
+    for py, px in houses:
+        draw.ellipse(
+            (
+                D * (px - 1.5),
+                D * (py - 1.5),
+                D * (px + 1.5),
+                D * (py + 1.5),
+            ),
+            fill=(255, 0, 0),
+        )
+
+    for py, px in sources:
+        draw.ellipse(
+            (
+                D * (px - 1.5),
+                D * (py - 1.5),
+                D * (px + 1.5),
+                D * (py + 1.5),
+            ),
+            fill=(0, 0, 255),
+        )
 
     im.show()
 
 
 if __name__ == "__main__":
-    visualize_graph("log/graph.txt", "tools/in/0000.txt")
+    import sys
+
+    case = sys.argv[1]
+    visualize_graph("log/graph.txt", f"tools/in/{case}.txt")
