@@ -47,9 +47,12 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
         annealing_state.update(&param, interactor, t);
     }
 
-    println!("# end optimize");
+    if cfg!(feature = "local") {
+        println!("# end optimize");
+        annealing_state.output_graph(param.c);
+    }
+
     eprintln!("used power: {}", annealing_state.state.total_damage);
-    annealing_state.output_graph(param.c);
 
     // 辺の間を繋げる
     let mut edges = vec![];

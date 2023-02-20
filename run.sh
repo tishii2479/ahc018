@@ -1,6 +1,6 @@
 FILE=$1
 
-cargo build --release
+cargo build --features local --release
 
 ./tools/target/release/tester ./target/release/ahc018 < tools/in/$FILE.txt > tools/out/$FILE.txt
 
