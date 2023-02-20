@@ -17,6 +17,7 @@ pub struct Input {
 pub struct State {
     pub is_broken: Vec2dBool,
     pub damage: Vec2d,
+    pub total_damage: i64,
 }
 
 impl State {
@@ -24,6 +25,7 @@ impl State {
         State {
             is_broken: Vec2dBool::new(n, n),
             damage: Vec2d::new(n, n),
+            total_damage: 0,
         }
     }
 
@@ -36,6 +38,7 @@ impl State {
             if power <= 0 {
                 break;
             }
+            self.total_damage += power;
             interactor.respond(pos, power, self);
         }
     }

@@ -98,8 +98,10 @@ if __name__ == "__main__":
     df = pd.merge(df, sample_bench_df, how="inner", on="case")
     df["relative_score"] = df.bench_score / df.score
     df["relative_score_sample"] = df.sample_bench_score / df.score
-    print(f"Relative_score:         {df.relative_score.mean():.4f}")
-    print(f"Relative_score_sample:  {df.relative_score_sample.mean():.4f}")
+    df["relative_score_sample_rev"] = df.score / df.sample_bench_score
+    print(f"Relative_score:             {df.relative_score.mean():.4f}")
+    print(f"Relative_score_sample:      {df.relative_score_sample.mean():.4f}")
+    print(f"Relative_score_sample_rev:  {df.relative_score_sample_rev.mean():.4f}")
 
     print(df.sort_values("relative_score"))
 

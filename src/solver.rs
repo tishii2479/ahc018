@@ -48,6 +48,7 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     }
 
     println!("# end optimize");
+    eprintln!("used power: {}", annealing_state.state.total_damage);
     annealing_state.output_graph(param.c);
 
     // 辺の間を繋げる
@@ -165,7 +166,7 @@ impl Graph {
     fn should_add_point(&self, pos: &Pos) -> bool {
         // 距離が一定以下の場所には点を打たなくて良い
         for p in self.points.iter() {
-            if p.dist(pos) <= 5 {
+            if p.dist(pos) < 5 {
                 return false;
             }
         }
