@@ -5,31 +5,36 @@ use std::{
 
 use crate::{def::*, interactor::*, param::*, util::rnd};
 
-pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
+pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
+    fn add_point(
+        pos: &Pos,
+        state: &mut State,
+        graph: &mut Graph,
+        param: &Param,
+        interactor: &Interactor,
+    ) {
+        if !pos.is_valid() || !graph.should_add_point(&pos) {
+            return;
+        }
+        state.crack_point(&pos, &param.p_test_power, interactor);
+        graph.add_point(&pos);
+    }
     for h in input.house.iter() {
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
                 y: y as i64,
             };
-            if !pos.is_valid() || !graph.should_add_point(&pos) {
-                continue;
-            }
-            state.crack_point(&pos, &param.p_test_power, interactor);
-            graph.add_point(&pos);
+            add_point(&pos, &mut state, &mut graph, param, interactor);
         }
         for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: x as i64,
                 y: h.y as i64,
             };
-            if !pos.is_valid() || !graph.should_add_point(&pos) {
-                continue;
-            }
-            state.crack_point(&pos, &param.p_test_power, interactor);
-            graph.add_point(&pos);
+            add_point(&pos, &mut state, &mut graph, param, interactor);
         }
     }
     for h in input.source.iter() {
@@ -38,22 +43,14 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
                 x: h.x as i64,
                 y: y as i64,
             };
-            if !pos.is_valid() || !graph.should_add_point(&pos) {
-                continue;
-            }
-            state.crack_point(&pos, &param.p_test_power, interactor);
-            graph.add_point(&pos);
+            add_point(&pos, &mut state, &mut graph, param, interactor);
         }
         for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: x as i64,
                 y: h.y as i64,
             };
-            if !pos.is_valid() || !graph.should_add_point(&pos) {
-                continue;
-            }
-            state.crack_point(&pos, &param.p_test_power, interactor);
-            graph.add_point(&pos);
+            add_point(&pos, &mut state, &mut graph, param, interactor);
         }
     }
     for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
@@ -62,11 +59,7 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
                 x: x as i64,
                 y: y as i64,
             };
-            if !pos.is_valid() || !graph.should_add_point(&pos) {
-                continue;
-            }
-            state.crack_point(&pos, &param.p_test_power, interactor);
-            graph.add_point(&pos);
+            add_point(&pos, &mut state, &mut graph, param, interactor);
         }
     }
     let mut annealing_state = AnnealingState::new(graph, state, input);
@@ -76,9 +69,6 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
     for t in 0..100 {
         annealing_state.update(&param, interactor, t);
     }
-
-    eprintln!("End optimize at turn: {}", interactor.respond_count);
-    println!("# end optimize");
 
     // 辺の間を繋げる
     let mut edges = vec![];
@@ -151,10 +141,6 @@ impl Graph {
             }
         }
         return true;
-    }
-
-    fn exist_point(&self, pos: &Pos) -> bool {
-        self.pos_index.contains_key(pos)
     }
 
     #[allow(unused)]
@@ -305,7 +291,7 @@ impl AnnealingState {
         ((((hard_mean + c) * dist) as f64) * dist_penalty) as i64
     }
 
-    fn update(&mut self, param: &Param, interactor: &mut Interactor, iteration: usize) {
+    fn update(&mut self, param: &Param, interactor: &Interactor, _iteration: usize) {
         let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
@@ -321,18 +307,15 @@ impl AnnealingState {
                 self.state.crack_point(&p, &param.p_test_power2, interactor);
             }
         }
-        if iteration > 0 && iteration % 10 == 0 {
-            for p in add_pos.iter() {
-                if !p.is_valid() {
-                    continue;
-                }
-                if self.graph.exist_point(p) || !self.graph.should_add_point(p) {
-                    continue;
-                }
-                self.state.crack_point(p, &param.p_test_power, interactor);
-                self.graph.add_point(p);
-            }
-        }
+        // if iteration > 0 && iteration % 10 == 0 {
+        //     for p in add_pos.iter() {
+        //         if !p.is_valid() || !self.graph.should_add_point(p) {
+        //             continue;
+        //         }
+        //         self.state.crack_point(p, &param.p_test_power, interactor);
+        //         self.graph.add_point(p);
+        //     }
+        // }
         self.recalculate_all(param.c);
     }
 }
@@ -346,7 +329,7 @@ fn create_path(
     graph: &Graph,
     state: &mut State,
     param: &Param,
-    interactor: &mut Interactor,
+    interactor: &Interactor,
 ) {
     let mut cells = vec![];
 
