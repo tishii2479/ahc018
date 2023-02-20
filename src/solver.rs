@@ -5,14 +5,14 @@ use std::{
 
 use crate::{def::*, interactor::*, param::*, util::rnd};
 
-pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
+pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
     for h in input.house.iter() {
-        for dy in (-100..=100).step_by(20) {
+        for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
-                y: h.y as i64 + dy,
+                y: y as i64,
             };
             if !pos.is_valid() || !graph.should_add_point(&pos) {
                 continue;
@@ -20,9 +20,9 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
             state.crack_point(&pos, &param.p_test_power, interactor);
             graph.add_point(&pos);
         }
-        for dx in (-100..=100).step_by(20) {
+        for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
-                x: h.x as i64 + dx,
+                x: x as i64,
                 y: h.y as i64,
             };
             if !pos.is_valid() || !graph.should_add_point(&pos) {
@@ -33,10 +33,10 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
         }
     }
     for h in input.source.iter() {
-        for dy in (-100..=100).step_by(20) {
+        for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
-                y: h.y as i64 + dy,
+                y: y as i64,
             };
             if !pos.is_valid() || !graph.should_add_point(&pos) {
                 continue;
@@ -44,9 +44,9 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
             state.crack_point(&pos, &param.p_test_power, interactor);
             graph.add_point(&pos);
         }
-        for dx in (-100..=100).step_by(20) {
+        for x in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
-                x: h.x as i64 + dx,
+                x: x as i64,
                 y: h.y as i64,
             };
             if !pos.is_valid() || !graph.should_add_point(&pos) {
@@ -74,8 +74,11 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
 
     // 繋ぐ辺を最適化する
     for t in 0..100 {
-        annealing_state.update(&param, &interactor, t);
+        annealing_state.update(&param, interactor, t);
     }
+
+    eprintln!("End optimize at turn: {}", interactor.respond_count);
+    println!("# end optimize");
 
     // 辺の間を繋げる
     let mut edges = vec![];
@@ -143,7 +146,7 @@ impl Graph {
     fn should_add_point(&self, pos: &Pos) -> bool {
         // 距離が一定以下の場所には点を打たなくて良い
         for p in self.points.iter() {
-            if p.dist(pos) <= 10 {
+            if p.dist(pos) <= 5 {
                 return false;
             }
         }
@@ -291,8 +294,8 @@ impl AnnealingState {
             if self.state.is_broken.get(p) {
                 self.state.damage.get(p)
             } else {
-                // まだ壊れていなかったら、2倍の強度を想定する
-                self.state.damage.get(p) * 2 // :param
+                // まだ壊れていなかったら、5倍の強度を想定する
+                i64::min(S_MAX, self.state.damage.get(p) * 5) // :param
             }
         };
         let edge = &self.graph.edges[edge_index];
@@ -302,7 +305,7 @@ impl AnnealingState {
         ((((hard_mean + c) * dist) as f64) * dist_penalty) as i64
     }
 
-    fn update(&mut self, param: &Param, interactor: &Interactor, iteration: usize) {
+    fn update(&mut self, param: &Param, interactor: &mut Interactor, iteration: usize) {
         let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
@@ -343,7 +346,7 @@ fn create_path(
     graph: &Graph,
     state: &mut State,
     param: &Param,
-    interactor: &Interactor,
+    interactor: &mut Interactor,
 ) {
     let mut cells = vec![];
 
@@ -406,7 +409,7 @@ fn create_path(
             } else {
                 let mean = sum / div;
                 let estimated = (mean * 0.75) as i64;
-                let to_estimated = i64::min(5000, estimated - state.damage.get(&cell));
+                let to_estimated = i64::min(S_MAX, estimated - state.damage.get(&cell));
                 if to_estimated <= 0 {
                     i64::max(20, param.c)
                 } else {

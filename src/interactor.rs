@@ -4,6 +4,7 @@ use std::{io, io::Write};
 pub struct Interactor {
     stdin: io::Stdin,
     stdout: io::Stdout,
+    pub respond_count: usize,
 }
 
 impl Interactor {
@@ -11,6 +12,7 @@ impl Interactor {
         Interactor {
             stdin: io::stdin(),
             stdout: io::stdout(),
+            respond_count: 0,
         }
     }
 
@@ -63,7 +65,9 @@ impl Interactor {
         }
     }
 
-    pub fn respond(&self, pos: &Pos, power: i64, state: &mut State) -> bool {
+    pub fn respond(&mut self, pos: &Pos, power: i64, state: &mut State) -> bool {
+        self.respond_count += 1;
+
         println!("{} {} {}", pos.y, pos.x, power);
         self.stdout.lock().flush().unwrap();
         state.damage.add(pos, power);
