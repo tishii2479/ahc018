@@ -1,9 +1,16 @@
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
+    fs::File,
+    io::Write,
 };
 
-use crate::{def::*, interactor::*, param::*, util::rnd};
+use crate::{
+    def::*,
+    interactor::*,
+    param::*,
+    util::{rnd, UnionFind},
+};
 
 fn add_point(
     pos: &Pos,
@@ -24,8 +31,6 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
     for h in input.house.iter() {
-        state.crack_point(&h, &param.p_test_power, interactor);
-        graph.add_point(&h);
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
@@ -42,8 +47,6 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
         }
     }
     for h in input.source.iter() {
-        state.crack_point(&h, &param.p_test_power, interactor);
-        graph.add_point(&h);
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
@@ -77,6 +80,7 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     }
 
     println!("# end optimize");
+    annealing_state.output_graph(param.c);
 
     // 辺の間を繋げる
     let mut edges = vec![];
@@ -98,6 +102,12 @@ impl Edge {
     fn other_point(&self, v: usize) -> usize {
         debug_assert!(self.u == v || self.v == v);
         self.v + self.u - v
+    }
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        (self.u == other.u && self.v == other.v) || (self.u == other.v && self.v == other.u)
     }
 }
 
@@ -137,6 +147,9 @@ impl Graph {
 
             // 近くの頂点を列挙
             for (j, p) in self.points.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
                 if s.dist(p) <= 30 {
                     near_pos.push(j);
                 }
@@ -156,21 +169,27 @@ impl Graph {
 
             dist.sort_by(|a, b| a.0.cmp(&b.0));
 
-            let mut connected: HashMap<usize, Vec<usize>> = HashMap::new();
-            for p in near_pos.iter() {
-                connected.insert(*p, vec![]);
+            let mut uf = UnionFind::new(near_pos.len());
+            let mut mp = HashMap::new();
+            for (i, v) in near_pos.iter().enumerate() {
+                mp.insert(v, i);
             }
 
             for (_, u, v) in dist.iter() {
-                if connected[u].contains(v) {
+                if uf.same(mp[u], mp[v]) {
                     continue;
                 }
-                connected.get_mut(u).unwrap().push(*v);
-                connected.get_mut(v).unwrap().push(*u);
+                uf.unite(mp[u], mp[v]);
+
+                let edge = Edge { u: *u, v: *v };
+                // すでに追加されている辺なら追加しない
+                if self.edges.contains(&edge) {
+                    continue;
+                }
                 let edge_index = self.edges.len();
                 self.adj[*u].push(edge_index);
                 self.adj[*v].push(edge_index);
-                self.edges.push(Edge { u: *u, v: *v });
+                self.edges.push(edge);
             }
         }
     }
@@ -352,14 +371,38 @@ impl AnnealingState {
             };
             add_pos.push(c);
         }
-        // if _iteration > 10 {
-        //     for p in add_pos.iter() {
-        //         if add_point(p, &mut self.state, &mut self.graph, param, interactor) {
-        //             eprintln!("{:?}", p);
-        //         }
-        //     }
-        // }
+        if _iteration > 10 {
+            for p in add_pos.iter() {
+                if add_point(p, &mut self.state, &mut self.graph, param, interactor) {
+                    eprintln!("added: {:?}", p);
+                }
+            }
+        }
         self.recalculate_all(param.c);
+    }
+
+    fn output_graph(&self, c: i64) {
+        let mut file = File::create("log/graph.txt").unwrap();
+        writeln!(
+            file,
+            "{} {}",
+            self.graph.points.len(),
+            self.graph.edges.len()
+        )
+        .unwrap();
+
+        for p in self.graph.points.iter() {
+            writeln!(file, "{} {}", p.y, p.x).unwrap();
+        }
+        for (i, e) in self.graph.edges.iter().enumerate() {
+            writeln!(file, "{} {} {}", e.u, e.v, self.edge_weight(i, c)).unwrap();
+        }
+        for path in self.to_source_paths.iter() {
+            for e in path.iter() {
+                write!(file, "{} ", e).unwrap();
+            }
+            writeln!(file).unwrap();
+        }
     }
 }
 
