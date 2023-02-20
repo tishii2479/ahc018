@@ -33,11 +33,11 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
 
         for _ in range(w):
             y, x = map(int, f.readline().strip().split())
-            houses.append((y, x))
+            sources.append((y, x))
 
         for _ in range(k):
             y, x = map(int, f.readline().strip().split())
-            sources.append((y, x))
+            houses.append((y, x))
 
     im = Image.new("RGB", (N * D, N * D), (255, 255, 255))
     draw = ImageDraw.Draw(im)

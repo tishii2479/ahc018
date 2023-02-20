@@ -318,8 +318,7 @@ impl AnnealingState {
         let edge = &self.graph.edges[edge_index];
         let dist = self.graph.points[edge.u].dist(&self.graph.points[edge.v]);
         let hard_mean = (estimated_hardness(edge.u) + estimated_hardness(edge.v)) / 2;
-        let dist_penalty = f64::max(1., dist as f64 / 20.);
-        ((((hard_mean + c) * dist) as f64) * dist_penalty) as i64
+        (hard_mean + c) * dist
     }
 
     fn update(&mut self, param: &Param, interactor: &Interactor, _iteration: usize) {
