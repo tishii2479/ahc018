@@ -24,6 +24,8 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
     let mut state = State::new(N);
     let mut graph = Graph::new();
     for h in input.house.iter() {
+        state.crack_point(&h, &param.p_test_power, interactor);
+        graph.add_point(&h);
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
@@ -40,6 +42,8 @@ pub fn solve(input: &Input, interactor: &Interactor, param: &Param) {
         }
     }
     for h in input.source.iter() {
+        state.crack_point(&h, &param.p_test_power, interactor);
+        graph.add_point(&h);
         for y in (param.p_grid_size / 2..N).step_by(param.p_grid_size) {
             let pos = Pos {
                 x: h.x as i64,
@@ -117,24 +121,58 @@ impl Graph {
     fn add_point(&mut self, pos: &Pos) -> usize {
         let p = pos.clone();
         let p_idx = self.points.len();
-        self.adj.push(vec![]);
-
-        // 周りの頂点と辺を繋ぐ
-        for (i, p) in self.points.iter().enumerate() {
-            let dist = p.dist(pos);
-            if dist <= 30 {
-                let edge_index = self.edges.len();
-                self.adj[i].push(edge_index);
-                self.adj[p_idx].push(edge_index);
-                self.edges.push(Edge { u: i, v: p_idx });
-            }
-        }
 
         self.points.push(p);
         self.pos_index.insert(p, p_idx);
 
         // 点のインデックスを返す
         p_idx
+    }
+
+    fn recalculate_edges(&mut self) {
+        self.edges = vec![];
+        self.adj = vec![vec![]; self.points.len()];
+        for (i, s) in self.points.iter().enumerate() {
+            let mut near_pos = vec![i];
+
+            // 近くの頂点を列挙
+            for (j, p) in self.points.iter().enumerate() {
+                if s.dist(p) <= 30 {
+                    near_pos.push(j);
+                }
+            }
+
+            let mut dist = vec![];
+
+            for u in near_pos.iter() {
+                for v in near_pos.iter() {
+                    if u == v {
+                        continue;
+                    }
+                    let (pu, pv) = (self.points[*u], self.points[*v]);
+                    dist.push((pu.dist(&pv), *u, *v));
+                }
+            }
+
+            dist.sort_by(|a, b| a.0.cmp(&b.0));
+
+            let mut connected: HashMap<usize, Vec<usize>> = HashMap::new();
+            for p in near_pos.iter() {
+                connected.insert(*p, vec![]);
+            }
+
+            for (_, u, v) in dist.iter() {
+                if connected[u].contains(v) {
+                    continue;
+                }
+                connected.get_mut(u).unwrap().push(*v);
+                connected.get_mut(v).unwrap().push(*u);
+                let edge_index = self.edges.len();
+                self.adj[*u].push(edge_index);
+                self.adj[*v].push(edge_index);
+                self.edges.push(Edge { u: *u, v: *v });
+            }
+        }
     }
 
     fn should_add_point(&self, pos: &Pos) -> bool {
@@ -212,6 +250,8 @@ impl AnnealingState {
     }
 
     fn recalculate_all(&mut self, c: i64) {
+        self.graph.recalculate_edges();
+
         self.edge_used = vec![0; self.graph.edges.len()];
         self.to_source_paths = vec![vec![]; self.house.len()];
         self.score = 0;
@@ -296,6 +336,7 @@ impl AnnealingState {
     }
 
     fn update(&mut self, param: &Param, interactor: &Interactor, _iteration: usize) {
+        let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
             if self.edge_used[i] == 0 {
                 continue;
@@ -304,7 +345,20 @@ impl AnnealingState {
                 let p = &self.graph.points[v];
                 self.state.crack_point(&p, &param.p_test_power2, interactor);
             }
+            let (u, v) = (self.graph.points[edge.u], self.graph.points[edge.v]);
+            let c = Pos {
+                x: (u.x + v.x) / 2,
+                y: (u.y + v.y) / 2,
+            };
+            add_pos.push(c);
         }
+        // if _iteration > 10 {
+        //     for p in add_pos.iter() {
+        //         if add_point(p, &mut self.state, &mut self.graph, param, interactor) {
+        //             eprintln!("{:?}", p);
+        //         }
+        //     }
+        // }
         self.recalculate_all(param.c);
     }
 }
