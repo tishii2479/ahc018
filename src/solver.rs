@@ -264,7 +264,9 @@ impl AnnealingState {
                     0
                 } else {
                     // 使われていない辺なら、重みはgraph.edge_weight
-                    self.edge_weight(edge_index, c)
+                    // 多様性を持たせるために、ランダムな値を足す
+                    let w = self.edge_weight(edge_index, c);
+                    w + rnd::gen_range(0, w as usize / 10 + 1) as i64
                 }
             }
         };
