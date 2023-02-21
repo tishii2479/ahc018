@@ -115,17 +115,7 @@ impl Graph {
         self.edges = vec![];
         self.adj = vec![vec![]; self.points.len()];
 
-        let mut add_edge_if_needed = |u: usize, v: usize| {
-            let edge = Edge { u, v };
-            // すでに追加されている辺なら追加しない
-            if self.edges.contains(&edge) {
-                return;
-            }
-            let edge_index = self.edges.len();
-            self.adj[u].push(edge_index);
-            self.adj[v].push(edge_index);
-            self.edges.push(edge);
-        };
+        let mut add_edges = vec![];
 
         for (i, s) in self.points.iter().enumerate() {
             let mut near_pos = vec![i];
@@ -139,7 +129,7 @@ impl Graph {
                     near_pos.push(j);
                 }
                 if s.dist(p) <= 15 {
-                    add_edge_if_needed(i, j);
+                    add_edges.push(Edge { u: i, v: j });
                 }
             }
 
@@ -168,8 +158,19 @@ impl Graph {
                     continue;
                 }
                 uf.unite(mp[u], mp[v]);
-                add_edge_if_needed(*u, *v);
+                add_edges.push(Edge { u: *u, v: *v });
             }
+        }
+
+        for edge in add_edges {
+            // すでに追加されている辺なら追加しない
+            if self.edges.contains(&edge) {
+                continue;
+            }
+            let edge_index = self.edges.len();
+            self.adj[edge.u].push(edge_index);
+            self.adj[edge.v].push(edge_index);
+            self.edges.push(edge);
         }
     }
 
