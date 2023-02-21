@@ -50,10 +50,9 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
 
     if cfg!(feature = "local") {
         println!("# end optimize");
+        eprintln!("used power: {}", annealing_state.state.total_damage);
         annealing_state.output_graph(param.c);
     }
-
-    eprintln!("used power: {}", annealing_state.state.total_damage);
 
     // 辺の間を繋げる
     let mut edges = vec![];
@@ -217,7 +216,7 @@ impl Graph {
 }
 
 struct AnnealingState {
-    edge_used: Vec<i64>,
+    edge_used: Vec<bool>,
     to_source_paths: Vec<Vec<usize>>,
     state: State,
     graph: Graph,
@@ -253,12 +252,12 @@ impl AnnealingState {
     fn find_path_to_source(&self, point_idx: usize, c: i64) -> Vec<usize> {
         let edge_weight = {
             |edge_index: usize| {
-                if self.edge_used[edge_index] == 0 {
-                    // 使われていない辺なら、重みはgraph.edge_weight
-                    self.edge_weight(edge_index, c)
-                } else {
+                if self.edge_used[edge_index] {
                     // すでに使われている辺なら、重みは0
                     0
+                } else {
+                    // 使われていない辺なら、重みはgraph.edge_weight
+                    self.edge_weight(edge_index, c)
                 }
             }
         };
@@ -287,7 +286,7 @@ impl AnnealingState {
     fn recalculate_all(&mut self, c: i64) {
         self.graph.recalculate_edges();
 
-        self.edge_used = vec![0; self.graph.edges.len()];
+        self.edge_used = vec![false; self.graph.edges.len()];
         self.to_source_paths = vec![vec![]; self.house.len()];
         self.score = 0;
         let house_count = self.house.len();
@@ -300,22 +299,12 @@ impl AnnealingState {
 
     fn set_edge_path(&mut self, h_idx: usize, edge_path: Vec<usize>, c: i64) {
         for edge_index in edge_path.iter() {
-            if self.edge_used[*edge_index] == 0 {
+            if !self.edge_used[*edge_index] {
                 self.score += self.edge_weight(*edge_index, c);
             }
-            self.edge_used[*edge_index] += 1;
+            self.edge_used[*edge_index] = true;
         }
         self.to_source_paths[h_idx] = edge_path;
-    }
-
-    #[allow(unused)]
-    fn remove_edge_path(&mut self, h_idx: usize, graph: &Graph, state: &State, param: &Param) {
-        for edge_index in self.to_source_paths[h_idx].iter() {
-            if self.edge_used[*edge_index] == 1 {
-                self.score -= self.edge_weight(*edge_index, param.c);
-            }
-            self.edge_used[*edge_index] -= 1;
-        }
     }
 
     fn edge_weight(&self, edge_index: usize, c: i64) -> i64 {
@@ -337,7 +326,7 @@ impl AnnealingState {
     fn update(&mut self, param: &Param, interactor: &mut Interactor, _iteration: usize) {
         let mut add_pos = vec![];
         for (i, edge) in self.graph.edges.iter().enumerate() {
-            if self.edge_used[i] == 0 {
+            if !self.edge_used[i] {
                 continue;
             }
             for v in vec![edge.u, edge.v] {
