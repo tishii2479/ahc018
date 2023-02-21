@@ -12,7 +12,7 @@ use crate::{
     util::{rnd, UnionFind},
 };
 
-fn add_point(
+fn add_point_if_needed(
     pos: &Pos,
     state: &mut State,
     graph: &mut Graph,
@@ -37,7 +37,7 @@ pub fn solve(input: &Input, interactor: &mut Interactor, param: &Param) {
                 x: *x as i64,
                 y: *y as i64,
             };
-            add_point(&pos, &mut state, &mut graph, param, interactor);
+            add_point_if_needed(&pos, &mut state, &mut graph, param, interactor);
         }
     }
     let mut annealing_state = AnnealingState::new(graph, state, input);
@@ -114,6 +114,19 @@ impl Graph {
     fn recalculate_edges(&mut self) {
         self.edges = vec![];
         self.adj = vec![vec![]; self.points.len()];
+
+        let mut add_edge_if_needed = |u: usize, v: usize| {
+            let edge = Edge { u, v };
+            // すでに追加されている辺なら追加しない
+            if self.edges.contains(&edge) {
+                return;
+            }
+            let edge_index = self.edges.len();
+            self.adj[u].push(edge_index);
+            self.adj[v].push(edge_index);
+            self.edges.push(edge);
+        };
+
         for (i, s) in self.points.iter().enumerate() {
             let mut near_pos = vec![i];
 
@@ -124,6 +137,9 @@ impl Graph {
                 }
                 if s.dist(p) <= 40 {
                     near_pos.push(j);
+                }
+                if s.dist(p) <= 15 {
+                    add_edge_if_needed(i, j);
                 }
             }
 
@@ -152,16 +168,7 @@ impl Graph {
                     continue;
                 }
                 uf.unite(mp[u], mp[v]);
-
-                let edge = Edge { u: *u, v: *v };
-                // すでに追加されている辺なら追加しない
-                if self.edges.contains(&edge) {
-                    continue;
-                }
-                let edge_index = self.edges.len();
-                self.adj[*u].push(edge_index);
-                self.adj[*v].push(edge_index);
-                self.edges.push(edge);
+                add_edge_if_needed(*u, *v);
             }
         }
     }
@@ -342,7 +349,7 @@ impl AnnealingState {
         }
         if _iteration > 10 {
             for p in add_pos.iter() {
-                add_point(p, &mut self.state, &mut self.graph, param, interactor);
+                add_point_if_needed(p, &mut self.state, &mut self.graph, param, interactor);
             }
         }
         self.recalculate_all(param.c);

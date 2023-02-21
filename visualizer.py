@@ -1,7 +1,8 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 def visualize_graph(graph_file: str, input_file: str) -> None:
+    font = ImageFont.truetype("Arial.ttf", 36)
     N = 200
     D = 16
     points = []
@@ -57,7 +58,7 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
             fill=(60, 60, 60),
         )
 
-    for u, v, w in edges:
+    for u, v, _ in edges:
         pu, pv = points[u], points[v]
         draw.line(
             (D * pu[1], D * pu[0], D * pv[1], D * pv[0]),
@@ -67,8 +68,14 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
 
     for path in paths:
         for e in path:
-            u, v, _ = edges[e]
+            u, v, w = edges[e]
             pu, pv = points[u], points[v]
+            draw.text(
+                ((pu[1] + pv[1]) / 2 * D, (pu[0] + pv[0]) / 2 * D),
+                f"{w}",
+                fill=(255, 0, 0),
+                font=font,
+            )
             draw.line(
                 (D * pu[1], D * pu[0], D * pv[1], D * pv[0]),
                 fill=(255, 0, 0),
