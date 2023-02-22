@@ -451,13 +451,13 @@ fn create_path(
             }
 
             let power = if div == 0. {
-                i64::max(20, param.c)
+                i64::max(32, param.c * 2)
             } else {
                 let mean = sum / div;
                 let estimated = (mean * 0.75) as i64;
                 let to_estimated = i64::min(S_MAX, estimated - state.damage.get(&cell));
                 if to_estimated <= 0 {
-                    i64::max(20, param.c)
+                    i64::max(32, param.c * 2)
                 } else {
                     to_estimated
                 }

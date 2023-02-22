@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 
 
-def visualize_graph(graph_file: str, input_file: str) -> None:
+def visualize_graph(graph_file: str, input_file: str, output_file: str) -> None:
     font = ImageFont.truetype("Arial.ttf", 36)
     N = 200
     D = 16
@@ -40,6 +40,31 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
             y, x = map(int, f.readline().strip().split())
             houses.append((y, x))
 
+    ds = {}
+    ps = {}
+    is_join = False
+    start_join = "# end optimize"
+
+    with open(output_file, "r") as f:
+        for line in f.readlines():
+            if len(line) >= 1 and line[:1] == "#":
+                if (
+                    len(line.strip()) >= len(start_join)
+                    and line[: len(start_join)] == start_join
+                ):
+                    is_join = True
+                continue
+
+            y, x, p = map(int, line.split())
+            if (y, x) not in ps:
+                ps[(y, x)] = 0
+            ps[(y, x)] += p
+
+            if is_join:
+                if (y, x) not in ds:
+                    ds[(y, x)] = 0
+                ds[(y, x)] += 1
+
     im = Image.new("RGB", (N * D, N * D), (255, 255, 255))
     draw = ImageDraw.Draw(im)
     for y in range(N):
@@ -56,6 +81,12 @@ def visualize_graph(graph_file: str, input_file: str) -> None:
                 D * (py + 0.5),
             ),
             fill=(60, 60, 60),
+        )
+        draw.text(
+            (px * D, py * D),
+            f"{ps[(py, px)]} / {s[py][px]}",
+            fill=(60, 60, 60),
+            font=font,
         )
 
     for u, v, _ in edges:
@@ -111,4 +142,4 @@ if __name__ == "__main__":
     import sys
 
     case = sys.argv[1]
-    visualize_graph("log/graph.txt", f"tools/in/{case}.txt")
+    visualize_graph("log/graph.txt", f"tools/in/{case}.txt", f"tools/out/{case}.txt")
