@@ -53,17 +53,21 @@ impl Solver {
         for y in (0..=N as i64).step_by(20) {
             for x in (0..=N as i64).step_by(20) {
                 let p = pos_to_grid(y, x);
-                self.investigate(&p);
+                self.investigate(&p, &vec![0, 8, 16, 32, 64, 128]);
             }
         }
 
-        for d in vec![10, 10] {
+        for (i, d) in vec![20, 20, 20].into_iter().enumerate() {
             // 頑丈度を予測したグリッドを作成する
             let mut estimated_grid = self.generate_estimated_grid();
 
             // 山登りによる選択経路の最適化
             // TODO: 複数回やって、多様性を出す
             self.optimize_route(&mut estimated_grid);
+
+            estimated_grid.output_grid(format!("log/grid_{}.txt", i).as_str());
+            self.state
+                .output_state(format!("log/state_{}.txt", i).as_str());
 
             // 選択経路の周りを探索する
             self.investigate_around_used_path(&estimated_grid, d);
@@ -72,13 +76,16 @@ impl Solver {
         let mut estimated_grid = self.generate_estimated_grid();
         self.optimize_route(&mut estimated_grid);
 
-        estimated_grid.output_grid("log/grid.txt");
-        self.state.output_state("log/state.txt");
+        estimated_grid.output_grid("log/grid_3.txt");
+        self.state.output_state("log/state_3.txt");
 
-        eprintln!(
-            "total damage before destroy_used_path: {}",
-            self.state.total_damage
-        );
+        if cfg!(feature = "local") {
+            println!("# end optimize");
+            eprintln!(
+                "total power before destroy_used_path: {}",
+                self.state.total_damage
+            );
+        }
 
         // 選択経路に使われている地点を割る
         self.destroy_used_path(&estimated_grid);
@@ -101,7 +108,7 @@ impl Solver {
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
-        for t in 0..100 {
+        for t in 0..50 {
             // ランダムな家から接続している水源までのパスを消す
             let h_pos = &self.input.house[rnd::gen_range(0, self.input.house.len())];
             let (path_to_source, _) = estimated_grid.find_current_path_to_source(&h_pos).unwrap();
@@ -159,7 +166,10 @@ impl Solver {
                 if !estimated_grid.is_used.get(&p) {
                     continue;
                 }
-                let mut estimated_hardness = self.estimate_hardness(&p).unwrap();
+                let mut estimated_hardness = i64::max(
+                    10,
+                    (self.estimate_hardness(&p).unwrap() as f64 * 0.8) as i64,
+                );
                 while !self.state.is_broken.get(&p) {
                     add_damage_to_hardness_if_needed(
                         &p,
@@ -196,21 +206,20 @@ impl Solver {
         }
 
         for p in investigate_pos.iter() {
-            self.investigate(&p);
+            self.investigate(&p, &vec![0, 8, 16, 32, 64, 128, 256, 512]);
         }
     }
 
-    fn investigate(&mut self, p: &Pos) -> bool {
+    fn investigate(&mut self, p: &Pos, dp: &Vec<i64>) -> bool {
         if self.state.is_broken.get(p) {
             return true;
         }
 
         let estimated_hardness = self.estimate_hardness(p).unwrap_or(10);
-        // TODO: inject dp
-        for dp in vec![0, 8, 16, 32, 64, 128, 256, 512] {
+        for dp in dp.iter() {
             add_damage_to_hardness_if_needed(
                 p,
-                estimated_hardness + dp,
+                estimated_hardness + *dp,
                 &mut self.state,
                 &mut self.interactor,
             );
@@ -266,8 +275,8 @@ impl Solver {
                 }
                 if let Some(h) = self.fetch_investigated_hardness(&p) {
                     let w = 1. / pos.dist(&p) as f64;
-                    sum += h as f64 * w;
-                    div += w;
+                    sum += h as f64 * w * w;
+                    div += w * w;
                 }
             }
         }
@@ -292,7 +301,7 @@ impl Solver {
         let damage = self.state.damage.get(p);
 
         let a = if damage_before_break == 0 {
-            (damage as f64 * 0.9) as i64
+            (damage as f64 * 0.5) as i64
         } else {
             (damage_before_break + damage) / 2
         };

@@ -1,10 +1,12 @@
-from PIL import Image, ImageDraw
+from math import sqrt
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 def visualize_graph(
     grid_file: str, state_file: str, input_file: str, output_file: str
 ) -> None:
-    # font = ImageFont.truetype("Arial.ttf", 36)
+    font = ImageFont.truetype("Arial.ttf", 36)  # noqa
     N = 200
     D = 16
     is_used = [[False] * N for _ in range(N)]
@@ -75,13 +77,20 @@ def visualize_graph(
     draw = ImageDraw.Draw(im)
     for y in range(N):
         for x in range(N):
-            o = 255 - int(estimated_s[y][x] / 5000 * 255)
+            o = 255 - int(sqrt(estimated_s[y][x]) / sqrt(5000) * 255)
             draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, o, 255))
 
+    for y in range(N):
+        for x in range(N):
             if damage[y][x] > 0:
-                d = 255 - int(damage[y][x] / 5000 * 255)
                 draw.rectangle(
-                    (x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(d, 255, d)
+                    (x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(30, 30, 30)
+                )
+                draw.text(
+                    (x * D, y * D),
+                    f"{damage[y][x]} / {s[y][x]}",
+                    font=font,
+                    fill=(30, 30, 30),
                 )
 
             if is_used[y][x]:
@@ -118,6 +127,10 @@ if __name__ == "__main__":
     import sys
 
     case = sys.argv[1]
-    visualize_graph(
-        "log/grid.txt", "log/state.txt", f"tools/in/{case}.txt", f"tools/out/{case}.txt"
-    )
+    for i in range(4):
+        visualize_graph(
+            f"log/grid_{i}.txt",
+            f"log/state_{i}.txt",
+            f"tools/in/{case}.txt",
+            f"tools/out/{case}.txt",
+        )
