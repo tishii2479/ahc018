@@ -1,4 +1,9 @@
-use std::{cmp::Reverse, collections::BinaryHeap, fs::File, io::Write};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashSet},
+    fs::File,
+    io::Write,
+};
 
 use crate::def::*;
 
@@ -10,6 +15,8 @@ pub struct Grid {
     // TODO: すでに壊している箇所は重みをゼロにして、estimated_weightに変更する
     pub estimated_hardness: Vec2d<i64>,
     pub is_used: Vec2d<bool>,
+    pub house: Vec<Pos>,
+    pub source: Vec<Pos>,
 }
 
 impl Grid {
@@ -18,8 +25,9 @@ impl Grid {
         start: &Pos,
         upper: i64,
         source: &Vec<Pos>,
+        c: i64,
     ) -> (Vec<Pos>, i64) {
-        let (dist, par) = self.dijkstra(start, upper);
+        let (dist, par) = self.dijkstra(start, upper, c);
 
         let mut best_source_pos = None;
         // 一番繋げるまでの距離が近い水源を探す
@@ -31,39 +39,56 @@ impl Grid {
 
         // h -> best_source_posまでに通る辺を復元する
         let mut cur = best_source_pos.unwrap().clone();
-        let mut edge_path = vec![cur.clone()];
+        let mut path = vec![cur.clone()];
         while &cur != start {
             let parent = par.get(&cur).unwrap();
-            edge_path.push(parent);
+            path.push(parent);
             cur = parent;
         }
-        edge_path.reverse();
-        (edge_path, dist.get(&best_source_pos.unwrap()))
+        path.reverse();
+        (path, dist.get(&best_source_pos.unwrap()))
     }
 
     pub fn find_current_path_to_source(&self, start: &Pos) -> Option<(Vec<Pos>, i64)> {
-        fn dfs(p: &Pos, par: &Pos, st: &mut Vec<Pos>, grid: &Grid) -> bool {
+        fn dfs(
+            p: &Pos,
+            par: &Pos,
+            st: &mut Vec<Pos>,
+            seen: &mut HashSet<Pos>,
+            grid: &Grid,
+        ) -> bool {
+            if grid.source.contains(p) {
+                return true;
+            }
             for (dy, dx) in DELTA {
                 let np = Pos {
                     y: p.y + dy,
                     x: p.x + dx,
                 };
-                if !np.is_valid() || !grid.is_used.get(&np) || par == &np {
+                if !np.is_valid() || par == &np {
+                    continue;
+                }
+                let is_not_used = !grid.is_used.get(&np) && !grid.source.contains(&np);
+                if is_not_used || seen.contains(&np) {
                     continue;
                 }
                 st.push(np.clone());
-                if dfs(&np, &p, st, grid) {
+                seen.insert(np.clone());
+                if dfs(&np, &p, st, seen, grid) {
                     return true;
                 }
                 st.pop();
+                seen.remove(&np);
             }
             false
         }
 
         let mut st = vec![];
         st.push(start.clone());
+        let mut seen = HashSet::new();
+        seen.insert(start.clone());
 
-        if dfs(start, &Pos { y: -1, x: -1 }, &mut st, &self) {
+        if dfs(start, &Pos { y: -1, x: -1 }, &mut st, &mut seen, &self) {
             let mut total_weight = 0;
             for p in st.iter() {
                 total_weight += self.estimated_hardness.get(p);
@@ -74,10 +99,11 @@ impl Grid {
         }
     }
 
-    pub fn find_unconnected_houses(&self, houses: &Vec<Pos>) -> Vec<usize> {
+    pub fn find_unconnected_houses(&self) -> Vec<usize> {
         let mut v = vec![];
-        for (i, h_pos) in houses.iter().enumerate() {
-            if self.find_current_path_to_source(h_pos).is_none() {
+        for (i, h_pos) in self.house.iter().enumerate() {
+            let result = self.find_current_path_to_source(h_pos);
+            if result.is_none() {
                 v.push(i);
             }
         }
@@ -97,7 +123,7 @@ impl Grid {
         return true;
     }
 
-    fn dijkstra(&self, start: &Pos, upper: i64) -> (Vec2d<i64>, Vec2d<Option<Pos>>) {
+    fn dijkstra(&self, start: &Pos, upper: i64, c: i64) -> (Vec2d<i64>, Vec2d<Option<Pos>>) {
         let mut dist = Vec2d::new(N, N, INF);
         let mut par = Vec2d::new(N, N, None);
 
@@ -117,7 +143,11 @@ impl Grid {
                 if !np.is_valid() {
                     continue;
                 }
-                let w = self.estimated_hardness.get(&np);
+                let w = if self.is_used.get(&np) {
+                    0
+                } else {
+                    self.estimated_hardness.get(&np) + 2 * c
+                };
                 if dist.get(&np) <= d + w {
                     continue;
                 }
@@ -130,8 +160,9 @@ impl Grid {
         (dist, par)
     }
 
-    pub fn output_grid(&self) {
-        let mut file = File::create("log/grid.txt").unwrap();
+    #[allow(unused)]
+    pub fn output_grid(&self, output_file: &str) {
+        let mut file = File::create(output_file).unwrap();
         for y in 0..N {
             for x in 0..N {
                 if self.is_used.get(&Pos {

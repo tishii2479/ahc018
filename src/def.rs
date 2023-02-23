@@ -49,7 +49,7 @@ impl Pos {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(unused)]
 pub struct Vec2d<T> {
     vec: Vec<T>,

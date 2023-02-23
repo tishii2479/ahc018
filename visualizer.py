@@ -1,8 +1,8 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 
 def visualize_graph(grid_file: str, input_file: str, output_file: str) -> None:
-    font = ImageFont.truetype("Arial.ttf", 36)
+    # font = ImageFont.truetype("Arial.ttf", 36)
     N = 200
     D = 16
     is_used = [[False] * N for _ in range(N)]

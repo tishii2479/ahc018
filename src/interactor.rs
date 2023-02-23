@@ -56,6 +56,7 @@ impl Interactor {
         println!("{} {} {}", pos.y, pos.x, power);
         std::io::stdout().flush().unwrap();
 
+        state.total_damage += power;
         state.damage.set(pos, state.damage.get(pos) + power);
 
         input! {

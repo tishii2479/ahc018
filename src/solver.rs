@@ -26,7 +26,7 @@ fn add_damage_to_hardness_if_needed(
     if state.is_broken.get(&p) {
         return false;
     }
-    let power = hardness - state.damage.get(&p);
+    let power = i64::min(S_MAX, hardness) - state.damage.get(&p);
     if power <= 0 {
         return false;
     }
@@ -72,6 +72,13 @@ impl Solver {
         let mut estimated_grid = self.generate_estimated_grid();
         self.optimize_route(&mut estimated_grid);
 
+        estimated_grid.output_grid("log/grid.txt");
+
+        eprintln!(
+            "total damage before destroy_used_path: {}",
+            self.state.total_damage
+        );
+
         // 選択経路に使われている地点を割る
         self.destroy_used_path(&estimated_grid);
     }
@@ -79,25 +86,26 @@ impl Solver {
     fn optimize_route(&self, estimated_grid: &mut Grid) {
         // 初期解の作成
         for h_pos in self.input.house.iter() {
-            let (nearest_source_path, dist) =
-                estimated_grid.find_path_to_nearest_source(&h_pos, INF, &self.input.source);
-            dbg!(&nearest_source_path, dist);
+            let (nearest_source_path, dist) = estimated_grid.find_path_to_nearest_source(
+                &h_pos,
+                INF,
+                &self.input.source,
+                self.input.c,
+            );
             for p in nearest_source_path.iter() {
                 estimated_grid.set(p, true);
             }
         }
 
-        estimated_grid.output_grid();
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
-        for _ in 0..1000 {
+        for t in 0..100 {
             // ランダムな家から接続している水源までのパスを消す
             let h_pos = &self.input.house[rnd::gen_range(0, self.input.house.len())];
             let (path_to_source, _) = estimated_grid.find_current_path_to_source(&h_pos).unwrap();
 
             let mut changes = vec![];
-
             for p in path_to_source.iter() {
                 changes.push(Change {
                     p: p.clone(),
@@ -108,7 +116,7 @@ impl Solver {
 
             // 水源に接続されなくなった家を再度接続する
             // TODO: 経路を消した家を優先的に再接続する
-            let mut reconnect_houses = estimated_grid.find_unconnected_houses(&self.input.house);
+            let mut reconnect_houses = estimated_grid.find_unconnected_houses();
             rnd::shuffle(&mut reconnect_houses);
 
             for i in reconnect_houses.iter() {
@@ -116,6 +124,7 @@ impl Solver {
                     &self.input.house[*i],
                     INF,
                     &self.input.source,
+                    self.input.c,
                 );
                 for p in nearest_source_path.iter() {
                     changes.push(Change {
@@ -130,6 +139,7 @@ impl Solver {
 
             if new_score < current_score {
                 // 採用
+                eprintln!("{} -> {}, at: {}", current_score, new_score, t);
                 current_score = new_score;
             } else {
                 // ロールバック
@@ -213,14 +223,23 @@ impl Solver {
         for y in 0..N as i64 {
             for x in 0..N as i64 {
                 let p = pos_to_grid(y, x);
-                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap());
+                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap_or(1000));
             }
+        }
+        let mut is_used = Vec2d::new(N, N, false);
+        for p in self.input.house.iter() {
+            is_used.set(&p, true);
+        }
+        for p in self.input.source.iter() {
+            is_used.set(&p, true);
         }
 
         Grid {
             total_score: 0,
             estimated_hardness,
-            is_used: Vec2d::new(N, N, false),
+            is_used,
+            house: self.input.house.clone(),
+            source: self.input.source.clone(),
         }
     }
 
@@ -241,7 +260,7 @@ impl Solver {
         for dx in 0..4 {
             for dy in 0..4 {
                 let p = pos_to_grid(dy * D + ty, dx * D + tx);
-                if !p.is_valid() {
+                if !p.is_valid() || pos == &p {
                     continue;
                 }
                 if let Some(h) = self.fetch_investigated_hardness(&p) {
@@ -265,7 +284,7 @@ impl Solver {
         }
         // 調査済みで、まだ壊れていなかったら、与えたダメージの2倍を返す
         if !self.state.is_broken.get(p) {
-            return Some(self.state.damage.get(p));
+            return Some(self.state.damage.get(p) * 2);
         }
 
         let damage_before_break = self.state.damage_before_break.get(p);
