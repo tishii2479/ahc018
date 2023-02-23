@@ -57,7 +57,7 @@ impl Solver {
             }
         }
 
-        for d in vec![10, 5] {
+        for d in vec![10, 10] {
             // 頑丈度を予測したグリッドを作成する
             let mut estimated_grid = self.generate_estimated_grid();
 
@@ -73,6 +73,7 @@ impl Solver {
         self.optimize_route(&mut estimated_grid);
 
         estimated_grid.output_grid("log/grid.txt");
+        self.state.output_state("log/state.txt");
 
         eprintln!(
             "total damage before destroy_used_path: {}",
@@ -206,7 +207,7 @@ impl Solver {
 
         let estimated_hardness = self.estimate_hardness(p).unwrap_or(10);
         // TODO: inject dp
-        for dp in vec![0, 8, 16, 32, 64, 128, 256, 512, 1024] {
+        for dp in vec![0, 8, 16, 32, 64, 128, 256, 512] {
             add_damage_to_hardness_if_needed(
                 p,
                 estimated_hardness + dp,

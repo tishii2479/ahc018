@@ -1,12 +1,15 @@
 from PIL import Image, ImageDraw
 
 
-def visualize_graph(grid_file: str, input_file: str, output_file: str) -> None:
+def visualize_graph(
+    grid_file: str, state_file: str, input_file: str, output_file: str
+) -> None:
     # font = ImageFont.truetype("Arial.ttf", 36)
     N = 200
     D = 16
     is_used = [[False] * N for _ in range(N)]
     estimated_s = [[0] * N for _ in range(N)]
+    damage = [[0] * N for _ in range(N)]
     s = []
     houses = []
     sources = []
@@ -22,6 +25,12 @@ def visualize_graph(grid_file: str, input_file: str, output_file: str) -> None:
             v = list(map(int, f.readline().strip().split()))
             for x in range(N):
                 estimated_s[y][x] = v[x]
+
+    with open(state_file, "r") as f:
+        for y in range(N):
+            v = list(map(int, f.readline().strip().split()))
+            for x in range(N):
+                damage[y][x] = v[x]
 
     with open(input_file, "r") as f:
         n, w, k, c = map(int, f.readline().strip().split())
@@ -69,6 +78,12 @@ def visualize_graph(grid_file: str, input_file: str, output_file: str) -> None:
             o = 255 - int(estimated_s[y][x] / 5000 * 255)
             draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, o, 255))
 
+            if damage[y][x] > 0:
+                d = 255 - int(damage[y][x] / 5000 * 255)
+                draw.rectangle(
+                    (x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(d, 255, d)
+                )
+
             if is_used[y][x]:
                 draw.rectangle(
                     (x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(255, 0, 0)
@@ -103,4 +118,6 @@ if __name__ == "__main__":
     import sys
 
     case = sys.argv[1]
-    visualize_graph("log/grid.txt", f"tools/in/{case}.txt", f"tools/out/{case}.txt")
+    visualize_graph(
+        "log/grid.txt", "log/state.txt", f"tools/in/{case}.txt", f"tools/out/{case}.txt"
+    )

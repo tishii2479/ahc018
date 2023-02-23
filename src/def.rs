@@ -1,3 +1,5 @@
+use std::{fs::File, io::Write};
+
 pub const INF: i64 = 100_000_000_000_000;
 pub const N: usize = 200;
 pub const S_MAX: i64 = 5000;
@@ -25,6 +27,25 @@ impl State {
             damage: Vec2d::new(n, n, 0),
             damage_before_break: Vec2d::new(n, n, 0),
             total_damage: 0,
+        }
+    }
+
+    #[allow(unused)]
+    pub fn output_state(&self, output_file: &str) {
+        let mut file = File::create(output_file).unwrap();
+        for y in 0..N {
+            for x in 0..N {
+                write!(
+                    file,
+                    "{} ",
+                    self.damage.get(&Pos {
+                        y: y as i64,
+                        x: x as i64
+                    })
+                )
+                .unwrap();
+            }
+            writeln!(file).unwrap();
         }
     }
 }
