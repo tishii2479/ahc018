@@ -52,10 +52,14 @@ impl Interactor {
         }
     }
 
-    pub fn respond(&mut self, pos: &Pos, power: i64, state: &mut State) -> bool {
+    pub fn add_damage(&mut self, pos: &Pos, power: i64, state: &mut State) -> bool {
         println!("{} {} {}", pos.y, pos.x, power);
         std::io::stdout().flush().unwrap();
-        state.damage.set(pos, state.damage.get(pos) + power);
+
+        let current_damage = state.damage.get(pos);
+        state.damage_before_break.set(pos, current_damage);
+        state.damage.set(pos, current_damage + power);
+
         input! {
             from &mut self.source,
             r: i64,

@@ -17,6 +17,7 @@ pub struct Input {
 pub struct State {
     pub is_broken: Vec2d<bool>,
     pub damage: Vec2d<i64>,
+    pub damage_before_break: Vec2d<i64>,
     pub total_damage: i64,
 }
 
@@ -25,10 +26,12 @@ impl State {
         State {
             is_broken: Vec2d::new(n, n, false),
             damage: Vec2d::new(n, n, 0),
+            damage_before_break: Vec2d::new(n, n, 0),
             total_damage: 0,
         }
     }
 
+    // TODO: 消す
     pub fn crack_point(&mut self, pos: &Pos, test_power: &Vec<i64>, interactor: &mut Interactor) {
         for test_power in test_power.iter() {
             if self.is_broken.get(pos) {
@@ -39,12 +42,12 @@ impl State {
                 break;
             }
             self.total_damage += power;
-            interactor.respond(pos, power, self);
+            interactor.add_damage(pos, power, self);
         }
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
 pub struct Pos {
     pub y: i64,
     pub x: i64,
@@ -57,6 +60,17 @@ impl Pos {
 
     pub fn is_valid(&self) -> bool {
         self.x >= 0 && self.y >= 0 && self.x < 200 && self.y < 200
+    }
+
+    pub fn to_idx(&self) -> usize {
+        self.y as usize * N + self.x as usize
+    }
+
+    pub fn from_idx(idx: usize) -> Pos {
+        Pos {
+            y: (idx / N) as i64,
+            x: (idx % N) as i64,
+        }
     }
 }
 
@@ -81,10 +95,10 @@ where
     }
 
     pub fn get(&self, pos: &Pos) -> T {
-        self.vec[pos.y as usize * self.m + pos.x as usize]
+        self.vec[pos.to_idx()]
     }
 
     pub fn set(&mut self, pos: &Pos, val: T) {
-        self.vec[pos.y as usize * self.m + pos.x as usize] = val
+        self.vec[pos.to_idx()] = val
     }
 }

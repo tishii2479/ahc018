@@ -5,7 +5,7 @@ struct Grid {
 }
 
 impl Grid {
-    fn dijkstra(&self, start: &Pos) -> (Vec<Vec<i64>>, Vec<Vec<Pos>>) {}
+    fn dijkstra(&self, start: &Pos, upper: i64) -> (Vec<Vec<i64>>, Vec<Vec<Pos>>) {}
 
     fn find_path_to_nearest_source(&self, h: &Pos) -> (Vec<Pos>, i64) {}
 
