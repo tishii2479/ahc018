@@ -1,9 +1,10 @@
-use std::{cmp::Reverse, collections::BinaryHeap};
+use std::{cmp::Reverse, collections::BinaryHeap, fs::File, io::Write};
 
 use crate::def::*;
 
 const DELTA: [(i64, i64); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
+#[derive(Debug)]
 pub struct Grid {
     pub total_score: i64,
     // TODO: すでに壊している箇所は重みをゼロにして、estimated_weightに変更する
@@ -41,17 +42,17 @@ impl Grid {
     }
 
     pub fn find_current_path_to_source(&self, start: &Pos) -> Option<(Vec<Pos>, i64)> {
-        fn dfs(p: &Pos, st: &mut Vec<Pos>, grid: &Grid) -> bool {
+        fn dfs(p: &Pos, par: &Pos, st: &mut Vec<Pos>, grid: &Grid) -> bool {
             for (dy, dx) in DELTA {
                 let np = Pos {
                     y: p.y + dy,
                     x: p.x + dx,
                 };
-                if !np.is_valid() || !grid.is_used.get(&np) {
+                if !np.is_valid() || !grid.is_used.get(&np) || par == &np {
                     continue;
                 }
                 st.push(np.clone());
-                if dfs(&np, st, grid) {
+                if dfs(&np, &p, st, grid) {
                     return true;
                 }
                 st.pop();
@@ -62,7 +63,7 @@ impl Grid {
         let mut st = vec![];
         st.push(start.clone());
 
-        if dfs(start, &mut st, &self) {
+        if dfs(start, &Pos { y: -1, x: -1 }, &mut st, &self) {
             let mut total_weight = 0;
             for p in st.iter() {
                 total_weight += self.estimated_hardness.get(p);
@@ -127,5 +128,37 @@ impl Grid {
         }
 
         (dist, par)
+    }
+
+    pub fn output_grid(&self) {
+        let mut file = File::create("log/grid.txt").unwrap();
+        for y in 0..N {
+            for x in 0..N {
+                if self.is_used.get(&Pos {
+                    y: y as i64,
+                    x: x as i64,
+                }) {
+                    write!(file, "1 ").unwrap();
+                } else {
+                    write!(file, "0 ").unwrap();
+                }
+            }
+            writeln!(file).unwrap();
+        }
+
+        for y in 0..N {
+            for x in 0..N {
+                write!(
+                    file,
+                    "{} ",
+                    self.estimated_hardness.get(&Pos {
+                        y: y as i64,
+                        x: x as i64
+                    })
+                )
+                .unwrap();
+            }
+            writeln!(file).unwrap();
+        }
     }
 }

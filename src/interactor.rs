@@ -56,9 +56,7 @@ impl Interactor {
         println!("{} {} {}", pos.y, pos.x, power);
         std::io::stdout().flush().unwrap();
 
-        let current_damage = state.damage.get(pos);
-        state.damage_before_break.set(pos, current_damage);
-        state.damage.set(pos, current_damage + power);
+        state.damage.set(pos, state.damage.get(pos) + power);
 
         input! {
             from &mut self.source,
@@ -66,6 +64,7 @@ impl Interactor {
         }
 
         if r == 0 {
+            state.damage_before_break.set(pos, state.damage.get(pos));
             return false;
         } else if r == 1 {
             state.is_broken.set(pos, true);

@@ -23,6 +23,9 @@ fn add_damage_to_hardness_if_needed(
     state: &mut State,
     interactor: &mut Interactor,
 ) -> bool {
+    if state.is_broken.get(&p) {
+        return false;
+    }
     let power = hardness - state.damage.get(&p);
     if power <= 0 {
         return false;
@@ -47,8 +50,8 @@ impl Solver {
     pub fn solve(&mut self) {
         // TODO: 必要な箇所だけを、house、sourceの位置をもとに計算する
         // グリッド上にあらかじめ掘削し、頑丈度を調べる
-        for y in (0..N as i64).step_by(20) {
-            for x in (0..N as i64).step_by(20) {
+        for y in (0..=N as i64).step_by(20) {
+            for x in (0..=N as i64).step_by(20) {
                 let p = pos_to_grid(y, x);
                 self.investigate(&p);
             }
@@ -78,11 +81,13 @@ impl Solver {
         for h_pos in self.input.house.iter() {
             let (nearest_source_path, dist) =
                 estimated_grid.find_path_to_nearest_source(&h_pos, INF, &self.input.source);
+            dbg!(&nearest_source_path, dist);
             for p in nearest_source_path.iter() {
                 estimated_grid.set(p, true);
             }
         }
 
+        estimated_grid.output_grid();
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
@@ -169,7 +174,7 @@ impl Solver {
                 // 探索箇所を加える
                 for py in vec![y / d * d, (y / d + 1) * d] {
                     for px in vec![x / d * d, (x / d + 1) * d] {
-                        let p = Pos { y: py, x: px };
+                        let p = pos_to_grid(py, px);
                         if investigate_pos.contains(&p) {
                             continue;
                         }
@@ -191,7 +196,7 @@ impl Solver {
 
         let estimated_hardness = self.estimate_hardness(p).unwrap_or(10);
         // TODO: inject dp
-        for dp in vec![8, 16, 32, 64, 128, 256, 512, 1024] {
+        for dp in vec![0, 8, 16, 32, 64, 128, 256, 512, 1024] {
             add_damage_to_hardness_if_needed(
                 p,
                 estimated_hardness + dp,
@@ -207,7 +212,7 @@ impl Solver {
         let mut estimated_hardness = Vec2d::new(N, N, 0);
         for y in 0..N as i64 {
             for x in 0..N as i64 {
-                let p = Pos { y, x };
+                let p = pos_to_grid(y, x);
                 estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap());
             }
         }
@@ -226,20 +231,16 @@ impl Solver {
 
         const D: i64 = 5;
         let (tx, ty) = (
-            (pos.x - (D as f64 * 1.5) as i64) / D,
-            (pos.y - (D as f64 * 1.5) as i64) / D,
+            (pos.x - (D as f64 * 1.5) as i64) / D * D,
+            (pos.y - (D as f64 * 1.5) as i64) / D * D,
         );
         let mut sum = 0.;
         let mut div = 0.;
 
         // TODO: 開拓が進んでいない時は20x20の区画を見る
-
         for dx in 0..4 {
             for dy in 0..4 {
-                let p = Pos {
-                    y: dy * D + ty,
-                    x: dx * D + tx,
-                };
+                let p = pos_to_grid(dy * D + ty, dx * D + tx);
                 if !p.is_valid() {
                     continue;
                 }
@@ -250,13 +251,21 @@ impl Solver {
                 }
             }
         }
-
-        Some((sum / div).round() as i64)
+        if sum == 0. {
+            None
+        } else {
+            Some((sum / div).round() as i64)
+        }
     }
 
     fn fetch_investigated_hardness(&self, p: &Pos) -> Option<i64> {
-        if self.state.is_broken.get(p) {
+        // まだ掘削していない場合
+        if self.state.damage.get(p) == 0 {
             return None;
+        }
+        // 調査済みで、まだ壊れていなかったら、与えたダメージの2倍を返す
+        if !self.state.is_broken.get(p) {
+            return Some(self.state.damage.get(p));
         }
 
         let damage_before_break = self.state.damage_before_break.get(p);

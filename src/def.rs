@@ -1,7 +1,4 @@
-use crate::interactor::Interactor;
-
 pub const INF: i64 = 100_000_000_000_000;
-pub const NA: usize = 100_000_000_000_000;
 pub const N: usize = 200;
 pub const S_MAX: i64 = 5000;
 
@@ -30,21 +27,6 @@ impl State {
             total_damage: 0,
         }
     }
-
-    // TODO: 消す
-    pub fn crack_point(&mut self, pos: &Pos, test_power: &Vec<i64>, interactor: &mut Interactor) {
-        for test_power in test_power.iter() {
-            if self.is_broken.get(pos) {
-                break;
-            }
-            let power = test_power - self.damage.get(pos);
-            if power <= 0 {
-                break;
-            }
-            self.total_damage += power;
-            interactor.add_damage(pos, power, self);
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
@@ -65,15 +47,9 @@ impl Pos {
     pub fn to_idx(&self) -> usize {
         self.y as usize * N + self.x as usize
     }
-
-    pub fn from_idx(idx: usize) -> Pos {
-        Pos {
-            y: (idx / N) as i64,
-            x: (idx % N) as i64,
-        }
-    }
 }
 
+#[derive(Debug)]
 #[allow(unused)]
 pub struct Vec2d<T> {
     vec: Vec<T>,

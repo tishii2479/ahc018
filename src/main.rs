@@ -10,6 +10,6 @@ use util::*;
 fn main() {
     time::start_clock();
 
-    let mut solver = solver2::Solver::new();
+    let mut solver = solver::Solver::new();
     solver.solve();
 }
