@@ -53,11 +53,11 @@ impl Solver {
         for y in (0..=N as i64).step_by(20) {
             for x in (0..=N as i64).step_by(20) {
                 let p = pos_to_grid(y, x);
-                self.investigate(&p, &vec![0, 8, 16, 32, 64, 128]);
+                self.investigate(&p, &vec![16, 32, 64, 128]);
             }
         }
 
-        for (i, d) in vec![20, 20, 20].into_iter().enumerate() {
+        for (i, d) in vec![20, 20, 20, 10, 10, 10, 10, 10].iter().enumerate() {
             // 頑丈度を予測したグリッドを作成する
             let mut estimated_grid = self.generate_estimated_grid();
 
@@ -70,14 +70,14 @@ impl Solver {
                 .output_state(format!("log/state_{}.txt", i).as_str());
 
             // 選択経路の周りを探索する
-            self.investigate_around_used_path(&estimated_grid, d);
+            self.investigate_around_used_path(&estimated_grid, *d);
         }
 
         let mut estimated_grid = self.generate_estimated_grid();
         self.optimize_route(&mut estimated_grid);
 
-        estimated_grid.output_grid("log/grid_3.txt");
-        self.state.output_state("log/state_3.txt");
+        estimated_grid.output_grid("log/grid_6.txt");
+        self.state.output_state("log/state_6.txt");
 
         if cfg!(feature = "local") {
             println!("# end optimize");
@@ -108,7 +108,7 @@ impl Solver {
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
-        for t in 0..50 {
+        for t in 0..10 {
             // ランダムな家から接続している水源までのパスを消す
             let h_pos = &self.input.house[rnd::gen_range(0, self.input.house.len())];
             let (path_to_source, _) = estimated_grid.find_current_path_to_source(&h_pos).unwrap();
@@ -206,7 +206,7 @@ impl Solver {
         }
 
         for p in investigate_pos.iter() {
-            self.investigate(&p, &vec![0, 8, 16, 32, 64, 128, 256, 512]);
+            self.investigate(&p, &vec![16, 32, 64, 128, 256, 512]);
         }
     }
 
@@ -215,14 +215,8 @@ impl Solver {
             return true;
         }
 
-        let estimated_hardness = self.estimate_hardness(p).unwrap_or(10);
         for dp in dp.iter() {
-            add_damage_to_hardness_if_needed(
-                p,
-                estimated_hardness + *dp,
-                &mut self.state,
-                &mut self.interactor,
-            );
+            add_damage_to_hardness_if_needed(p, *dp, &mut self.state, &mut self.interactor);
         }
         return false;
     }
@@ -259,22 +253,22 @@ impl Solver {
         }
 
         const D: i64 = 5;
-        let (tx, ty) = (
-            (pos.x - (D as f64 * 1.5) as i64) / D * D,
-            (pos.y - (D as f64 * 1.5) as i64) / D * D,
-        );
         let mut sum = 0.;
         let mut div = 0.;
 
         // TODO: 開拓が進んでいない時は20x20の区画を見る
-        for dx in 0..4 {
-            for dy in 0..4 {
-                let p = pos_to_grid(dy * D + ty, dx * D + tx);
+        for x in (0..=N as i64).step_by(D as usize) {
+            for y in (0..=N as i64).step_by(D as usize) {
+                let p = pos_to_grid(y, x);
                 if !p.is_valid() || pos == &p {
                     continue;
                 }
+                let d = pos.euclid_dist(&p);
+                if d > 20. {
+                    continue;
+                }
+                let w = 1. / d;
                 if let Some(h) = self.fetch_investigated_hardness(&p) {
-                    let w = 1. / pos.dist(&p) as f64;
                     sum += h as f64 * w * w;
                     div += w * w;
                 }

@@ -7,3 +7,5 @@ cargo build --features local --release
 pbcopy < tools/out/$FILE.txt
 
 python3 visualizer.py $1
+
+open log/vis_movie.gif

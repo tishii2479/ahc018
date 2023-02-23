@@ -57,8 +57,11 @@ pub struct Pos {
 }
 
 impl Pos {
-    pub fn dist(&self, to: &Pos) -> i64 {
+    pub fn manhattan_dist(&self, to: &Pos) -> i64 {
         i64::abs(to.y - self.y) + i64::abs(to.x - self.x)
+    }
+    pub fn euclid_dist(&self, to: &Pos) -> f64 {
+        (((to.y - self.y) * (to.y - self.y) + (to.x - self.x) * (to.x - self.x)) as f64).sqrt()
     }
 
     pub fn is_valid(&self) -> bool {

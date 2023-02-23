@@ -1,11 +1,9 @@
-from math import sqrt
-
 from PIL import Image, ImageDraw, ImageFont
 
 
 def visualize_graph(
     grid_file: str, state_file: str, input_file: str, output_file: str
-) -> None:
+) -> Image:
     font = ImageFont.truetype("Arial.ttf", 36)  # noqa
     N = 200
     D = 16
@@ -77,7 +75,7 @@ def visualize_graph(
     draw = ImageDraw.Draw(im)
     for y in range(N):
         for x in range(N):
-            o = 255 - int(sqrt(estimated_s[y][x]) / sqrt(5000) * 255)
+            o = 255 - int((estimated_s[y][x]) / (5000) * 255)
             draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, o, 255))
 
     for y in range(N):
@@ -120,17 +118,28 @@ def visualize_graph(
             fill=(0, 0, 255),
         )
 
-    im.show()
+    return im
 
 
 if __name__ == "__main__":
     import sys
 
     case = sys.argv[1]
-    for i in range(4):
-        visualize_graph(
+    images = []
+    for i in range(7):
+        im = visualize_graph(
             f"log/grid_{i}.txt",
             f"log/state_{i}.txt",
             f"tools/in/{case}.txt",
             f"tools/out/{case}.txt",
         )
+        im.save(f"log/vis_{i}.png")
+        images.append(im)
+
+    images[0].save(
+        "log/vis_movie.gif",
+        save_all=True,
+        append_images=images[1:],
+        duration=400,
+        loop=0,
+    )
