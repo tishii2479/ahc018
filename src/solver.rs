@@ -53,11 +53,10 @@ impl Solver {
         for y in (0..=N as i64).step_by(20) {
             for x in (0..=N as i64).step_by(20) {
                 let p = pos_to_grid(y, x);
-                self.investigate(&p, &vec![16, 32, 64, 128]);
+                self.investigate(&p, &vec![13, 50, 100]);
             }
         }
-        let ds = vec![20, 20, 20, 10, 10, 10, 10];
-        let dp = vec![16, 32, 64, 128, 256, 512];
+        let ds = vec![20, 20, 20, 20, 20, 20, 20];
 
         for (i, d) in ds.iter().enumerate() {
             // 頑丈度を予測したグリッドを作成する
@@ -70,8 +69,10 @@ impl Solver {
             self.state
                 .output_state(format!("log/state_{}.txt", i).as_str());
 
+            let dp = vec![13, 50, 100, 300, 500];
+
             // 選択経路の周りを探索する
-            self.investigate_around_used_path(&estimated_grid, *d, &dp);
+            self.investigate_around_used_path(&estimated_grid, *d / 2, &dp);
         }
 
         let mut estimated_grid = self.generate_estimated_grid();
@@ -96,7 +97,7 @@ impl Solver {
     fn optimize_route(&self, estimated_grid: &mut Grid) {
         // 初期解の作成
         for h_pos in self.input.house.iter() {
-            let (nearest_source_path, dist) = estimated_grid.find_path_to_nearest_source(
+            let (nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
                 &h_pos,
                 INF,
                 &self.input.source,
@@ -130,7 +131,7 @@ impl Solver {
             rnd::shuffle(&mut reconnect_houses);
 
             for i in reconnect_houses.iter() {
-                let (nearest_source_path, dist) = estimated_grid.find_path_to_nearest_source(
+                let (nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
                     &self.input.house[*i],
                     INF,
                     &self.input.source,
@@ -205,6 +206,9 @@ impl Solver {
                         if (py % d) != 0 || (px % d) != 0 {
                             continue;
                         }
+                        if ((px + py) % (2 * d)) == d {
+                            continue;
+                        }
                         let np = pos_to_grid(py, px);
                         if !np.is_valid() || investigate_pos.contains(&np) {
                             continue;
@@ -237,7 +241,7 @@ impl Solver {
         for y in 0..N as i64 {
             for x in 0..N as i64 {
                 let p = pos_to_grid(y, x);
-                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap_or(1000));
+                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap_or(10));
             }
         }
         let mut is_used = Vec2d::new(N, N, false);
@@ -278,7 +282,7 @@ impl Solver {
                 }
                 let w = 1. / d;
                 if let Some(h) = self.fetch_investigated_hardness(&p) {
-                    sum += h as f64 * w * w;
+                    sum += (h as f64).log2() * w * w;
                     div += w * w;
                 }
             }
@@ -286,7 +290,7 @@ impl Solver {
         if sum == 0. {
             None
         } else {
-            Some((sum / div).round() as i64)
+            Some((2.0 as f64).powf(sum / div).round() as i64)
         }
     }
 
@@ -295,9 +299,9 @@ impl Solver {
         if self.state.damage.get(p) == 0 {
             return None;
         }
-        // 調査済みで、まだ壊れていなかったら、与えたダメージの2倍を返す
+        // 調査済みで、まだ壊れていなかったら、与えたダメージの5倍を返す
         if !self.state.is_broken.get(p) {
-            return Some(self.state.damage.get(p) * 2);
+            return Some(self.state.damage.get(p) * 5);
         }
 
         let damage_before_break = self.state.damage_before_break.get(p);
