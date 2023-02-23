@@ -55,7 +55,7 @@ impl Interactor {
     pub fn respond(&mut self, pos: &Pos, power: i64, state: &mut State) -> bool {
         println!("{} {} {}", pos.y, pos.x, power);
         std::io::stdout().flush().unwrap();
-        state.damage.add(pos, power);
+        state.damage.set(pos, state.damage.get(pos) + power);
         input! {
             from &mut self.source,
             r: i64,

@@ -15,16 +15,16 @@ pub struct Input {
 }
 
 pub struct State {
-    pub is_broken: Vec2dBool,
-    pub damage: Vec2d,
+    pub is_broken: Vec2d<bool>,
+    pub damage: Vec2d<i64>,
     pub total_damage: i64,
 }
 
 impl State {
     pub fn new(n: usize) -> State {
         State {
-            is_broken: Vec2dBool::new(n, n),
-            damage: Vec2d::new(n, n),
+            is_broken: Vec2d::new(n, n, false),
+            damage: Vec2d::new(n, n, 0),
             total_damage: 0,
         }
     }
@@ -61,57 +61,30 @@ impl Pos {
 }
 
 #[allow(unused)]
-pub struct Vec2d {
-    vec: Vec<i64>,
+pub struct Vec2d<T> {
+    vec: Vec<T>,
     n: usize,
     m: usize,
 }
 
 #[allow(unused)]
-impl Vec2d {
-    pub fn new(n: usize, m: usize) -> Vec2d {
+impl<T> Vec2d<T>
+where
+    T: Copy + Clone,
+{
+    pub fn new(n: usize, m: usize, init_value: T) -> Vec2d<T> {
         Vec2d {
-            vec: vec![0; n * m],
+            vec: vec![init_value; n * m],
             n,
             m,
         }
     }
 
-    pub fn get(&self, pos: &Pos) -> i64 {
+    pub fn get(&self, pos: &Pos) -> T {
         self.vec[pos.y as usize * self.m + pos.x as usize]
     }
 
-    pub fn set(&mut self, pos: &Pos, val: i64) {
-        self.vec[pos.y as usize * self.m + pos.x as usize] = val
-    }
-
-    pub fn add(&mut self, pos: &Pos, val: i64) {
-        self.vec[pos.y as usize * self.m + pos.x as usize] += val
-    }
-}
-
-#[allow(unused)]
-pub struct Vec2dBool {
-    vec: Vec<bool>,
-    n: usize,
-    m: usize,
-}
-
-#[allow(unused)]
-impl Vec2dBool {
-    pub fn new(n: usize, m: usize) -> Vec2dBool {
-        Vec2dBool {
-            vec: vec![false; n * m],
-            n,
-            m,
-        }
-    }
-
-    pub fn get(&self, pos: &Pos) -> bool {
-        self.vec[pos.y as usize * self.m + pos.x as usize]
-    }
-
-    pub fn set(&mut self, pos: &Pos, val: bool) {
+    pub fn set(&mut self, pos: &Pos, val: T) {
         self.vec[pos.y as usize * self.m + pos.x as usize] = val
     }
 }
