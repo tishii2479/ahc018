@@ -68,6 +68,7 @@ impl Grid {
                 if !np.is_valid() || par == &np {
                     continue;
                 }
+                // FIXME: is_usedに常にhouse、sourceが含まれるように修正
                 let is_not_used = !grid.is_used.get(&np) && !grid.source.contains(&np);
                 if is_not_used || seen.contains(&np) {
                     continue;
@@ -162,6 +163,9 @@ impl Grid {
 
     #[allow(unused)]
     pub fn output_grid(&self, output_file: &str) {
+        if !cfg!(feature = "local") {
+            return;
+        }
         let mut file = File::create(output_file).unwrap();
         for y in 0..N {
             for x in 0..N {

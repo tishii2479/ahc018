@@ -56,13 +56,14 @@ impl Solver {
                 self.investigate(&p, &vec![16, 32, 64, 128]);
             }
         }
+        let ds = vec![20, 20, 20, 10, 10, 10, 10];
+        let dp = vec![16, 32, 64, 128, 256, 512];
 
-        for (i, d) in vec![20, 20, 20, 10, 10, 10, 10, 10].iter().enumerate() {
+        for (i, d) in ds.iter().enumerate() {
             // 頑丈度を予測したグリッドを作成する
             let mut estimated_grid = self.generate_estimated_grid();
 
             // 山登りによる選択経路の最適化
-            // TODO: 複数回やって、多様性を出す
             self.optimize_route(&mut estimated_grid);
 
             estimated_grid.output_grid(format!("log/grid_{}.txt", i).as_str());
@@ -70,14 +71,15 @@ impl Solver {
                 .output_state(format!("log/state_{}.txt", i).as_str());
 
             // 選択経路の周りを探索する
-            self.investigate_around_used_path(&estimated_grid, *d);
+            self.investigate_around_used_path(&estimated_grid, *d, &dp);
         }
 
         let mut estimated_grid = self.generate_estimated_grid();
         self.optimize_route(&mut estimated_grid);
 
-        estimated_grid.output_grid("log/grid_6.txt");
-        self.state.output_state("log/state_6.txt");
+        estimated_grid.output_grid(format!("log/grid_{}.txt", ds.len()).as_str());
+        self.state
+            .output_state(format!("log/state_{}.txt", ds.len()).as_str());
 
         if cfg!(feature = "local") {
             println!("# end optimize");
@@ -123,7 +125,7 @@ impl Solver {
             }
 
             // 水源に接続されなくなった家を再度接続する
-            // TODO: 経路を消した家を優先的に再接続する
+            // TODO: 経路を消した家を最初に再接続する
             let mut reconnect_houses = estimated_grid.find_unconnected_houses();
             rnd::shuffle(&mut reconnect_houses);
 
@@ -163,7 +165,11 @@ impl Solver {
         for y in 0..N as i64 {
             for x in 0..N as i64 {
                 let p = Pos { y, x };
-                if !estimated_grid.is_used.get(&p) {
+                // FIXME: is_usedに常にhouse、sourceが含まれるように修正
+                if !estimated_grid.is_used.get(&p)
+                    && !self.input.house.contains(&p)
+                    && !self.input.source.contains(&p)
+                {
                     continue;
                 }
                 let mut estimated_hardness = i64::max(
@@ -184,29 +190,33 @@ impl Solver {
         }
     }
 
-    fn investigate_around_used_path(&mut self, estimated_grid: &Grid, d: i64) {
+    fn investigate_around_used_path(&mut self, estimated_grid: &Grid, d: i64, dp: &Vec<i64>) {
         let mut investigate_pos = vec![];
 
         for y in 0..N as i64 {
             for x in 0..N as i64 {
-                if !estimated_grid.is_used.get(&Pos { y, x }) {
+                let p = Pos { y, x };
+                if !estimated_grid.is_used.get(&p) {
                     continue;
                 }
                 // 探索箇所を加える
-                for py in vec![y / d * d, (y / d + 1) * d] {
-                    for px in vec![x / d * d, (x / d + 1) * d] {
-                        let p = pos_to_grid(py, px);
-                        if investigate_pos.contains(&p) {
+                for py in y - d..=y + d {
+                    for px in x - d..=x + d {
+                        if (py % d) != 0 || (px % d) != 0 {
                             continue;
                         }
-                        investigate_pos.push(p);
+                        let np = pos_to_grid(py, px);
+                        if !np.is_valid() || investigate_pos.contains(&np) {
+                            continue;
+                        }
+                        investigate_pos.push(np);
                     }
                 }
             }
         }
 
         for p in investigate_pos.iter() {
-            self.investigate(&p, &vec![16, 32, 64, 128, 256, 512]);
+            self.investigate(&p, &dp);
         }
     }
 
@@ -256,7 +266,6 @@ impl Solver {
         let mut sum = 0.;
         let mut div = 0.;
 
-        // TODO: 開拓が進んでいない時は20x20の区画を見る
         for x in (0..=N as i64).step_by(D as usize) {
             for y in (0..=N as i64).step_by(D as usize) {
                 let p = pos_to_grid(y, x);
