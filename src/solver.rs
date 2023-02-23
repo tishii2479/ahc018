@@ -1,4 +1,9 @@
-use crate::{def::*, grid::*, interactor::*, util::rnd};
+use crate::{
+    def::*,
+    grid::*,
+    interactor::*,
+    util::{rnd, time},
+};
 
 struct Change {
     p: Pos,
@@ -63,7 +68,7 @@ impl Solver {
             let mut estimated_grid = self.generate_estimated_grid();
 
             // 山登りによる選択経路の最適化
-            self.optimize_route(&mut estimated_grid);
+            self.generate_route(&mut estimated_grid);
 
             estimated_grid.output_grid(format!("log/grid_{}.txt", i).as_str());
             self.state
@@ -94,8 +99,7 @@ impl Solver {
         self.destroy_used_path(&estimated_grid);
     }
 
-    fn optimize_route(&self, estimated_grid: &mut Grid) {
-        // 初期解の作成
+    fn generate_route(&self, estimated_grid: &mut Grid) {
         for h_pos in self.input.house.iter() {
             let (nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
                 &h_pos,
@@ -107,11 +111,16 @@ impl Solver {
                 estimated_grid.set(p, true);
             }
         }
+    }
+
+    fn optimize_route(&self, estimated_grid: &mut Grid) {
+        // 初期解の作成
+        self.generate_route(estimated_grid);
 
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
-        for t in 0..10 {
+        while time::elapsed_seconds() < 4. {
             // ランダムな家から接続している水源までのパスを消す
             let h_pos = &self.input.house[rnd::gen_range(0, self.input.house.len())];
             let (path_to_source, _) = estimated_grid.find_current_path_to_source(&h_pos).unwrap();
@@ -150,7 +159,7 @@ impl Solver {
 
             if new_score < current_score {
                 // 採用
-                eprintln!("{} -> {}, at: {}", current_score, new_score, t);
+                eprintln!("{} -> {}", current_score, new_score);
                 current_score = new_score;
             } else {
                 // ロールバック
@@ -237,11 +246,12 @@ impl Solver {
 
     fn generate_estimated_grid(&self) -> Grid {
         // TODO: is_usedにhouseとsourceの位置を追加
-        let mut estimated_hardness = Vec2d::new(N, N, 0);
+        let mut estimated_weight = Vec2d::new(N, N, 0);
         for y in 0..N as i64 {
             for x in 0..N as i64 {
                 let p = pos_to_grid(y, x);
-                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap_or(10));
+                let w = self.estimate_hardness(&p).unwrap_or(10) - self.state.damage.get(&p);
+                estimated_weight.set(&p, i64::max(0, w));
             }
         }
         let mut is_used = Vec2d::new(N, N, false);
@@ -254,7 +264,7 @@ impl Solver {
 
         Grid {
             total_score: 0,
-            estimated_hardness,
+            estimated_weight,
             is_used,
             house: self.input.house.clone(),
             source: self.input.source.clone(),

@@ -1,7 +1,6 @@
 mod def;
 mod grid;
 mod interactor;
-mod param;
 mod solver;
 mod util;
 
