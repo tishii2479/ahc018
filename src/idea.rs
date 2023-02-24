@@ -29,7 +29,7 @@ fn solve() {
     self.optimize_route(&mut grid);
 
     // 採用するルート上の通路を全て壊す
-    self.destroy_edge_path();
+    self.destroy_edge_path(&grid);
 }
 
 fn dfs(start: &Pos, upper: i64) -> Option<Vec<Pos>> {
@@ -69,7 +69,8 @@ fn dfs(start: &Pos, upper: i64) -> Option<Vec<Pos>> {
         for next_pos in pos.next() {
             // next_posの近くに使える点があれば、それを使う
             let next_pos = find_near_pos(next_pos);
-            let consumed = d + pos.dist(&next_pos) * (state.damage.get(&pos) + c);
+            let hard_mean = (state.damage.get(&pos) + upper) / 2;
+            let consumed = d + pos.dist(&next_pos) * (hard_mean + c);
             let next_dist = eval(next_pos, consumed);
             if next_dist < dist.get(&next_pos) {
                 heap.push(next_dist);
@@ -88,13 +89,3 @@ fn dfs(start: &Pos, upper: i64) -> Option<Vec<Pos>> {
         None
     }
 }
-
-// 評価関数
-fn eval(pos: &Pos, consumed: i64) -> i64 {
-    let dist = to_nearest_sinked_dist(pos);
-    dist * (upper + c * 2) + consumed
-}
-
-// すでに開拓されている近くの点を探す
-// なければ元の点を返す
-fn find_near_pos(pos: &Pos) -> Pos {}

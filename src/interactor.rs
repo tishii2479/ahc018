@@ -57,6 +57,7 @@ impl Interactor {
         std::io::stdout().flush().unwrap();
 
         state.total_damage += power;
+        state.total_crack += 1;
         state.damage.set(pos, state.damage.get(pos) + power);
 
         input! {

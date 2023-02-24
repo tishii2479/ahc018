@@ -12,7 +12,7 @@ def visualize_graph(
     output_file: str,
     real_s: bool = False,
 ) -> Image:
-    font = ImageFont.truetype("Arial.ttf", 10)  # noqa
+    font = ImageFont.truetype("Arial.ttf", 8)  # noqa
     N = 200
     D = 4
     is_used = [[False] * N for _ in range(N)]
@@ -86,7 +86,7 @@ def visualize_graph(
             e = s[y][x] if real_s else estimated_s[y][x]
             d = 5000 if real_s else 1500
             o = 255 - int(e / d * 255)
-            draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(255, o, o))
+            draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, 255, o))
 
     for y in range(N):
         for x in range(N):
@@ -95,8 +95,8 @@ def visualize_graph(
                     (x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(30, 30, 30)
                 )
                 draw.text(
-                    (x * D, y * D),
-                    f"{damage[y][x]} / {s[y][x]}",
+                    (x * D, y * D + D),
+                    f"{damage[y][x] / s[y][x]:.2f}",
                     font=font,
                     fill=(30, 30, 30),
                 )

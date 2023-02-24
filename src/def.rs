@@ -3,6 +3,7 @@ use std::{fs::File, io::Write};
 pub const INF: i64 = 100_000_000_000_000;
 pub const N: usize = 200;
 pub const S_MAX: i64 = 5000;
+pub const DELTA: [(i64, i64); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
 pub struct Input {
     pub n: usize,
@@ -18,6 +19,7 @@ pub struct State {
     pub damage: Vec2d<i64>,
     pub damage_before_break: Vec2d<i64>,
     pub total_damage: i64,
+    pub total_crack: i64,
 }
 
 impl State {
@@ -27,6 +29,7 @@ impl State {
             damage: Vec2d::new(n, n, 0),
             damage_before_break: Vec2d::new(n, n, 0),
             total_damage: 0,
+            total_crack: 0,
         }
     }
 

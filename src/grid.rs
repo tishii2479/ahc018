@@ -7,8 +7,6 @@ use std::{
 
 use crate::def::*;
 
-const DELTA: [(i64, i64); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
-
 #[derive(Debug)]
 pub struct Grid {
     pub total_score: i64,
