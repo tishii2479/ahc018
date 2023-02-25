@@ -58,12 +58,12 @@ def run(case_num: int):
                 print(f"error: {score}", flush=True)
                 exit()
 
-            print(
-                f"case {seed:3}: (score: {scores[-1][0]:>13,}, current ave: "
-                + f"{total / count:>15,.2f}, "
-                + f"N = {N:3}, W = {W}, K = {K:2}, C = {C:3})",
-                flush=True,
-            )
+            # print(
+            #     f"case {seed:3}: (score: {scores[-1][0]:>13,}, current ave: "
+            #     + f"{total / count:>15,.2f}, "
+            #     + f"N = {N:3}, W = {W}, K = {K:2}, C = {C:3})",
+            #     flush=True,
+            # )
 
     print("=" * 100)
     scores.sort()
@@ -76,7 +76,7 @@ def run(case_num: int):
 
 
 if __name__ == "__main__":
-    score_df = run(100)
+    score_df = run(500)
     score_df.to_csv("log/score.csv", index=False)
 
     score_df = score_df.set_index("case")

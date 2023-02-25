@@ -1,4 +1,4 @@
-use crate::{def::*, grid::*, interactor::*, util::rnd};
+use crate::{def::*, grid::*, interactor::*, param::Param, util::rnd};
 
 struct Change {
     p: Pos,
@@ -8,6 +8,7 @@ struct Change {
 pub struct Solver {
     input: Input,
     state: State,
+    param: Param,
     interactor: Interactor,
 }
 
@@ -39,10 +40,12 @@ impl Solver {
         let mut interactor = Interactor::new();
         let input = interactor.read_input();
         let state = State::new(input.n);
+        let param = Param::new(&input);
 
         Solver {
             input,
             state,
+            param,
             interactor,
         }
     }
@@ -53,7 +56,7 @@ impl Solver {
         for y in (0..=N as i64).step_by(20) {
             for x in (0..=N as i64).step_by(20) {
                 let p = pos_to_grid(y, x);
-                self.investigate(&p, &vec![13, 50, 100]);
+                self.investigate(&p, &(15..=105).step_by(self.param.p1).collect());
             }
         }
         let ds = vec![20, 20, 20, 20, 20, 20, 20];
@@ -69,7 +72,7 @@ impl Solver {
             self.state
                 .output_state(format!("log/state_{}.txt", i).as_str());
 
-            let dp = vec![13, 50, 100, 300, 500];
+            let dp = (15..500).step_by(self.param.p1).collect();
 
             // 選択経路の周りを探索する
             self.investigate_around_used_path(&estimated_grid, *d / 2, &dp);
