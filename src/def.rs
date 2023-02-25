@@ -1,6 +1,9 @@
 use std::{fs::File, io::Write};
 
+use crate::interactor::Interactor;
+
 pub const INF: i64 = 100_000_000_000_000;
+pub const NA: usize = 100_000_000_000_000;
 pub const N: usize = 200;
 pub const S_MAX: i64 = 5000;
 
@@ -49,6 +52,20 @@ impl State {
                 .unwrap();
             }
             writeln!(file).unwrap();
+        }
+    }
+
+    pub fn crack_point(&mut self, pos: &Pos, test_power: &Vec<i64>, interactor: &mut Interactor) {
+        for test_power in test_power.iter() {
+            if self.is_broken.get(pos) {
+                break;
+            }
+            let power = test_power - self.damage.get(pos);
+            if power <= 0 {
+                break;
+            }
+            self.total_damage += power;
+            interactor.add_damage(pos, power, self);
         }
     }
 }

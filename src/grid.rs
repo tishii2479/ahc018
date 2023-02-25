@@ -60,7 +60,7 @@ impl Grid {
             if grid.source.contains(p) {
                 return true;
             }
-            for (dy, dx) in DELTA {
+            for (dy, dx) in DELTA.into_iter() {
                 let np = Pos {
                     y: p.y + dy,
                     x: p.x + dx,

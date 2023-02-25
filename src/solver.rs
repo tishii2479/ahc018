@@ -6,10 +6,10 @@ struct Change {
 }
 
 pub struct Solver {
-    input: Input,
-    state: State,
-    param: Param,
-    interactor: Interactor,
+    pub input: Input,
+    pub state: State,
+    pub param: Param,
+    pub interactor: Interactor,
 }
 
 fn pos_to_grid(y: i64, x: i64) -> Pos {
@@ -36,20 +36,6 @@ fn add_damage_to_hardness_if_needed(
 }
 
 impl Solver {
-    pub fn new() -> Solver {
-        let mut interactor = Interactor::new();
-        let input = interactor.read_input();
-        let state = State::new(input.n);
-        let param = Param::new(&input);
-
-        Solver {
-            input,
-            state,
-            param,
-            interactor,
-        }
-    }
-
     pub fn solve(&mut self) {
         // TODO: 必要な箇所だけを、house、sourceの位置をもとに計算する
         // グリッド上にあらかじめ掘削し、頑丈度を調べる
