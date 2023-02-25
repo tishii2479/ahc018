@@ -57,6 +57,7 @@ impl Interactor {
         std::io::stdout().flush().unwrap();
 
         state.total_damage += power;
+        state.total_crack += 1;
         state.damage.set(pos, state.damage.get(pos) + power);
 
         input! {
@@ -73,6 +74,10 @@ impl Interactor {
         } else if r == 2 {
             // 終了する
             eprintln!("elapsed seconds: {:.4}", time::elapsed_seconds());
+            eprintln!(
+                "total damage, total crack: {} {}",
+                state.total_damage, state.total_crack
+            );
             std::process::exit(0);
         } else if r == -1 {
             panic!("Invalid operation");

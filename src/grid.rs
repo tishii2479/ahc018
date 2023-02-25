@@ -12,8 +12,7 @@ const DELTA: [(i64, i64); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 #[derive(Debug)]
 pub struct Grid {
     pub total_score: i64,
-    // TODO: すでに壊している箇所は重みをゼロにして、estimated_weightに変更する
-    pub estimated_hardness: Vec2d<i64>,
+    pub estimated_weight: Vec2d<i64>,
     pub is_used: Vec2d<bool>,
     pub house: Vec<Pos>,
     pub source: Vec<Pos>,
@@ -92,7 +91,7 @@ impl Grid {
         if dfs(start, &Pos { y: -1, x: -1 }, &mut st, &mut seen, &self) {
             let mut total_weight = 0;
             for p in st.iter() {
-                total_weight += self.estimated_hardness.get(p);
+                total_weight += self.estimated_weight.get(p);
             }
             Some((st, total_weight))
         } else {
@@ -116,9 +115,9 @@ impl Grid {
             return false;
         }
         if self.is_used.get(&p) {
-            self.total_score -= self.estimated_hardness.get(&p);
+            self.total_score -= self.estimated_weight.get(&p);
         } else {
-            self.total_score += self.estimated_hardness.get(&p);
+            self.total_score += self.estimated_weight.get(&p);
         }
         self.is_used.set(&p, v);
         return true;
@@ -147,7 +146,7 @@ impl Grid {
                 let w = if self.is_used.get(&np) {
                     0
                 } else {
-                    self.estimated_hardness.get(&np) + 2 * c
+                    self.estimated_weight.get(&np) + 2 * c
                 };
                 if dist.get(&np) <= d + w {
                     continue;
@@ -163,9 +162,6 @@ impl Grid {
 
     #[allow(unused)]
     pub fn output_grid(&self, output_file: &str) {
-        if !cfg!(feature = "local") {
-            return;
-        }
         let mut file = File::create(output_file).unwrap();
         for y in 0..N {
             for x in 0..N {
@@ -186,7 +182,7 @@ impl Grid {
                 write!(
                     file,
                     "{} ",
-                    self.estimated_hardness.get(&Pos {
+                    self.estimated_weight.get(&Pos {
                         y: y as i64,
                         x: x as i64
                     })

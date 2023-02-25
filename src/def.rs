@@ -18,6 +18,7 @@ pub struct State {
     pub damage: Vec2d<i64>,
     pub damage_before_break: Vec2d<i64>,
     pub total_damage: i64,
+    pub total_crack: i64,
 }
 
 impl State {
@@ -27,14 +28,12 @@ impl State {
             damage: Vec2d::new(n, n, 0),
             damage_before_break: Vec2d::new(n, n, 0),
             total_damage: 0,
+            total_crack: 0,
         }
     }
 
     #[allow(unused)]
     pub fn output_state(&self, output_file: &str) {
-        if !cfg!(feature = "local") {
-            return;
-        }
         let mut file = File::create(output_file).unwrap();
         for y in 0..N {
             for x in 0..N {

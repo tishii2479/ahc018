@@ -1,3 +1,6 @@
+import os
+import sys
+
 import matplotlib.pyplot as plt  # noqa
 from PIL import Image, ImageDraw, ImageFont
 
@@ -82,7 +85,7 @@ def visualize_graph(
         for x in range(N):
             e = s[y][x] if real_s else estimated_s[y][x]
             o = 255 - int(e / 5000 * 255)
-            draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(255, o, o))
+            draw.rectangle((x * D, y * D, (x + 1) * D, (y + 1) * D), fill=(o, 255, o))
 
     for y in range(N):
         for x in range(N):
@@ -195,20 +198,23 @@ def analyze_damage_efficency(input_file: str, output_file: str) -> None:
 
 
 if __name__ == "__main__":
-    import sys
-
     case = sys.argv[1]
     images = []
-    n = 8
-    for i in range(n):
+    n = 0
+
+    while True:
+        grid_file = f"log/grid_{n}.txt"
+        if os.path.exists(grid_file) is False:
+            break
         im = visualize_graph(
-            f"log/grid_{i}.txt",
-            f"log/state_{i}.txt",
+            grid_file,
+            f"log/state_{n}.txt",
             f"tools/in/{case}.txt",
             f"tools/out/{case}.txt",
         )
-        im.save(f"log/vis_{i}.png")
+        im.save(f"log/vis_{n}.png")
         images.append(im)
+        n += 1
 
     images.append(
         visualize_graph(

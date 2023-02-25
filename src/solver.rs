@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::{def::*, grid::*, interactor::*, util::rnd};
 
 struct Change {
@@ -9,12 +11,6 @@ pub struct Solver {
     input: Input,
     state: State,
     interactor: Interactor,
-}
-
-fn pos_to_grid(y: i64, x: i64) -> Pos {
-    let y = if y == N as i64 { y - 1 } else { y };
-    let x = if x == N as i64 { x - 1 } else { x };
-    Pos { y, x }
 }
 
 fn add_damage_to_hardness_if_needed(
@@ -48,54 +44,131 @@ impl Solver {
     }
 
     pub fn solve(&mut self) {
-        // TODO: 必要な箇所だけを、house、sourceの位置をもとに計算する
-        // グリッド上にあらかじめ掘削し、頑丈度を調べる
-        for y in (0..=N as i64).step_by(20) {
-            for x in (0..=N as i64).step_by(20) {
-                let p = pos_to_grid(y, x);
-                self.investigate(&p, &vec![13, 50, 100]);
+        fn log(grid: &Grid, state: &State, i: usize) {
+            if cfg!(feature = "local") {
+                grid.output_grid(format!("log/grid_{}.txt", i).as_str());
+                state.output_state(format!("log/state_{}.txt", i).as_str());
             }
         }
-        let ds = vec![20, 20, 20, 20, 20, 20, 20];
 
-        for (i, d) in ds.iter().enumerate() {
-            // 頑丈度を予測したグリッドを作成する
-            let mut estimated_grid = self.generate_estimated_grid();
-
-            // 山登りによる選択経路の最適化
-            self.optimize_route(&mut estimated_grid);
-
-            estimated_grid.output_grid(format!("log/grid_{}.txt", i).as_str());
-            self.state
-                .output_state(format!("log/state_{}.txt", i).as_str());
-
-            let dp = vec![13, 50, 100, 300, 500];
-
-            // 選択経路の周りを探索する
-            self.investigate_around_used_path(&estimated_grid, *d / 2, &dp);
+        fn to_near_pos(pos: Pos, state: &State, interval: i64) -> Pos {
+            // :param
+            for dy in -interval / 2..=interval / 2 {
+                for dx in -interval / 2..=interval / 2 {
+                    let p = Pos {
+                        y: pos.y + dy,
+                        x: pos.x + dx,
+                    };
+                    if !p.is_valid() {
+                        continue;
+                    }
+                    if state.damage.get(&p) > 0 {
+                        return p;
+                    }
+                }
+            }
+            pos
         }
 
-        let mut estimated_grid = self.generate_estimated_grid();
+        // グリッド上にあらかじめ掘削し、頑丈度を調べる
+        // TODO: 必要な箇所だけを、house、sourceの位置をもとに計算する
+        // for y in (10..N as i64).step_by(20) {
+        //     for x in (10..N as i64).step_by(20) {
+        //         for h in (12..=100).step_by(usize::min(self.input.c as usize * 2, 22)) {
+        //             // :param
+        //             add_damage_to_hardness_if_needed(&p, h, &mut self.state, &mut self.interactor);
+        //         }
+        //     }
+        // }
+
+        let interval = 10;
+        let ps = vec![2000];
+        let trial = 20;
+        let mut best = vec![INF; self.input.house.len()];
+
+        for j in 0..trial {
+            for (i, upper_p) in ps.iter().enumerate() {
+                // 頑丈度を予測したグリッドを作成する
+                let mut estimated_grid = self.generate_estimated_grid(false);
+
+                let house_count = self.input.house.len();
+                // 選択経路の周りを探索する
+                for h_idx in 0..house_count {
+                    // TODO: 枝刈り
+                    // if best[h_idx] < *upper_p {
+                    //     continue;
+                    // }
+                    let (mut nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
+                        &self.input.house[h_idx],
+                        INF,
+                        &self.input.source,
+                        self.input.c,
+                    );
+                    nearest_source_path.reverse();
+                    let mut ok = true;
+                    for p in nearest_source_path {
+                        // 近くの点を探す
+                        estimated_grid.set(&p, true);
+
+                        if best[h_idx] < *upper_p || !ok {
+                            continue;
+                        }
+
+                        let p = to_near_pos(p, &self.state, interval);
+
+                        // upper_pまで硬さを調べる
+                        let mut h = 100;
+                        let step = 100;
+                        while h < *upper_p {
+                            // :param
+                            add_damage_to_hardness_if_needed(
+                                &p,
+                                h,
+                                &mut self.state,
+                                &mut self.interactor,
+                            );
+                            h += step;
+                        }
+                        add_damage_to_hardness_if_needed(
+                            &p,
+                            *upper_p,
+                            &mut self.state,
+                            &mut self.interactor,
+                        );
+                        if !self.state.is_broken.get(&p) {
+                            ok = false;
+                        }
+                    }
+                    if ok && *upper_p < best[h_idx] {
+                        eprintln!("ok: {:?} at: {}, {}", &self.input.house[h_idx], upper_p, j);
+                        best[h_idx] = *upper_p;
+                    }
+                }
+
+                log(&estimated_grid, &self.state, j * ps.len() + i);
+            }
+        }
+
+        let mut estimated_grid = self.generate_estimated_grid(true);
         self.optimize_route(&mut estimated_grid);
 
-        estimated_grid.output_grid(format!("log/grid_{}.txt", ds.len()).as_str());
-        self.state
-            .output_state(format!("log/state_{}.txt", ds.len()).as_str());
+        log(&estimated_grid, &self.state, ps.len() * trial);
 
         if cfg!(feature = "local") {
             println!("# end optimize");
-            eprintln!(
-                "total power before destroy_used_path: {}",
-                self.state.total_damage
-            );
         }
+
+        eprintln!(
+            "total power before destroy_used_path: {} {}",
+            self.state.total_damage,
+            self.state.total_crack * self.input.c
+        );
 
         // 選択経路に使われている地点を割る
         self.destroy_used_path(&estimated_grid);
     }
 
-    fn optimize_route(&self, estimated_grid: &mut Grid) {
-        // 初期解の作成
+    fn generate_route(&self, estimated_grid: &mut Grid) {
         for h_pos in self.input.house.iter() {
             let (nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
                 &h_pos,
@@ -107,11 +180,16 @@ impl Solver {
                 estimated_grid.set(p, true);
             }
         }
+    }
+
+    fn optimize_route(&self, estimated_grid: &mut Grid) {
+        // 初期解の作成
+        self.generate_route(estimated_grid);
 
         let mut current_score = estimated_grid.total_score;
 
         // 山登りによる最適化
-        for t in 0..10 {
+        for t in 0..100 {
             // ランダムな家から接続している水源までのパスを消す
             let h_pos = &self.input.house[rnd::gen_range(0, self.input.house.len())];
             let (path_to_source, _) = estimated_grid.find_current_path_to_source(&h_pos).unwrap();
@@ -173,10 +251,9 @@ impl Solver {
                 {
                     continue;
                 }
-                let mut estimated_hardness = i64::max(
-                    10,
-                    (self.estimate_hardness(&p).unwrap() as f64 * 0.8) as i64,
-                );
+                // :param
+                let mut estimated_hardness =
+                    i64::max(10, (self.estimate_hardness(&p, true) as f64 * 0.8) as i64);
                 while !self.state.is_broken.get(&p) {
                     add_damage_to_hardness_if_needed(
                         &p,
@@ -184,64 +261,27 @@ impl Solver {
                         &mut self.state,
                         &mut self.interactor,
                     );
-                    // param:
+                    // :param
                     estimated_hardness = i64::min(S_MAX, (estimated_hardness as f64 * 1.2) as i64);
                 }
             }
         }
     }
 
-    fn investigate_around_used_path(&mut self, estimated_grid: &Grid, d: i64, dp: &Vec<i64>) {
-        let mut investigate_pos = vec![];
-
+    fn generate_estimated_grid(&self, is_final: bool) -> Grid {
+        let mut estimated_weight = Vec2d::new(N, N, 0);
         for y in 0..N as i64 {
             for x in 0..N as i64 {
                 let p = Pos { y, x };
-                if !estimated_grid.is_used.get(&p) {
-                    continue;
-                }
-                // 探索箇所を加える
-                for py in y - d..=y + d {
-                    for px in x - d..=x + d {
-                        if (py % d) != 0 || (px % d) != 0 {
-                            continue;
-                        }
-                        if ((px + py) % (2 * d)) == d {
-                            continue;
-                        }
-                        let np = pos_to_grid(py, px);
-                        if !np.is_valid() || investigate_pos.contains(&np) {
-                            continue;
-                        }
-                        investigate_pos.push(np);
+                let w = {
+                    let h = self.estimate_hardness(&p, is_final);
+                    if is_final {
+                        i64::max(0, h - self.state.damage.get(&p))
+                    } else {
+                        h
                     }
-                }
-            }
-        }
-
-        for p in investigate_pos.iter() {
-            self.investigate(&p, &dp);
-        }
-    }
-
-    fn investigate(&mut self, p: &Pos, dp: &Vec<i64>) -> bool {
-        if self.state.is_broken.get(p) {
-            return true;
-        }
-
-        for dp in dp.iter() {
-            add_damage_to_hardness_if_needed(p, *dp, &mut self.state, &mut self.interactor);
-        }
-        return false;
-    }
-
-    fn generate_estimated_grid(&self) -> Grid {
-        // TODO: is_usedにhouseとsourceの位置を追加
-        let mut estimated_hardness = Vec2d::new(N, N, 0);
-        for y in 0..N as i64 {
-            for x in 0..N as i64 {
-                let p = pos_to_grid(y, x);
-                estimated_hardness.set(&p, self.estimate_hardness(&p).unwrap_or(10));
+                };
+                estimated_weight.set(&p, w);
             }
         }
         let mut is_used = Vec2d::new(N, N, false);
@@ -254,54 +294,57 @@ impl Solver {
 
         Grid {
             total_score: 0,
-            estimated_hardness,
+            estimated_weight,
             is_used,
             house: self.input.house.clone(),
             source: self.input.source.clone(),
         }
     }
 
-    fn estimate_hardness(&self, pos: &Pos) -> Option<i64> {
+    fn estimate_hardness(&self, pos: &Pos, is_final: bool) -> i64 {
         if self.state.is_broken.get(pos) {
-            return self.fetch_investigated_hardness(pos);
+            return self.fetch_investigated_hardness(pos, is_final).unwrap();
         }
-
-        const D: i64 = 5;
         let mut sum = 0.;
         let mut div = 0.;
+        let not_investigate_hard = if is_final { 1000 } else { 100 };
 
-        for x in (0..=N as i64).step_by(D as usize) {
-            for y in (0..=N as i64).step_by(D as usize) {
-                let p = pos_to_grid(y, x);
+        for x in pos.x - 20..=pos.x + 20 {
+            for y in pos.y - 20..=pos.y + 20 {
+                let p = Pos { y, x };
                 if !p.is_valid() || pos == &p {
                     continue;
                 }
-                let d = pos.euclid_dist(&p);
-                if d > 20. {
-                    continue;
-                }
-                let w = 1. / d;
-                if let Some(h) = self.fetch_investigated_hardness(&p) {
-                    sum += (h as f64).log2() * w * w;
-                    div += w * w;
+                if let Some(h) = self.fetch_investigated_hardness(&p, is_final) {
+                    let d = pos.euclid_dist(&p);
+                    let radius = f64::abs((h - not_investigate_hard) as f64).powf(0.5) / 4. + 1.;
+                    if d >= radius {
+                        continue;
+                    }
+                    let w = 1. - (d / radius);
+                    sum += h as f64 * w;
+                    div += w;
                 }
             }
         }
-        if sum == 0. {
-            None
+        if div == 0. {
+            not_investigate_hard
+        } else if div < 1. {
+            (sum + not_investigate_hard as f64 * (1. - div)).round() as i64
         } else {
-            Some((2.0 as f64).powf(sum / div).round() as i64)
+            (sum / div).round() as i64
         }
     }
 
-    fn fetch_investigated_hardness(&self, p: &Pos) -> Option<i64> {
-        // まだ掘削していない場合
-        if self.state.damage.get(p) == 0 {
-            return None;
-        }
-        // 調査済みで、まだ壊れていなかったら、与えたダメージの5倍を返す
+    fn fetch_investigated_hardness(&self, p: &Pos, is_final: bool) -> Option<i64> {
         if !self.state.is_broken.get(p) {
-            return Some(self.state.damage.get(p) * 5);
+            if self.state.damage.get(p) > 0 {
+                if is_final {
+                    return Some(1000);
+                }
+                return Some(i64::min(S_MAX, self.state.damage.get(p) * 2));
+            }
+            return None;
         }
 
         let damage_before_break = self.state.damage_before_break.get(p);
