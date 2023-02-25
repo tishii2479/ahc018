@@ -44,10 +44,14 @@ impl Solver {
     }
 
     pub fn solve(&mut self) {
-        fn log(grid: &Grid, state: &State, i: usize) {
-            if cfg!(feature = "local") {
-                grid.output_grid(format!("log/grid_{}.txt", i).as_str());
-                state.output_state(format!("log/state_{}.txt", i).as_str());
+        static mut log_i: usize = 0;
+        fn log(grid: &Grid, state: &State) {
+            unsafe {
+                if cfg!(feature = "local") {
+                    grid.output_grid(format!("log/grid_{}.txt", log_i).as_str());
+                    state.output_state(format!("log/state_{}.txt", log_i).as_str());
+                }
+                log_i += 1;
             }
         }
 
@@ -62,6 +66,9 @@ impl Solver {
                     if !p.is_valid() {
                         continue;
                     }
+                    if pos.euclid_dist(&p) >= interval as f64 / 2. {
+                        continue;
+                    }
                     if state.damage.get(&p) > 0 {
                         return p;
                     }
@@ -70,34 +77,21 @@ impl Solver {
             pos
         }
 
-        // グリッド上にあらかじめ掘削し、頑丈度を調べる
-        // TODO: 必要な箇所だけを、house、sourceの位置をもとに計算する
-        // for y in (10..N as i64).step_by(20) {
-        //     for x in (10..N as i64).step_by(20) {
-        //         for h in (12..=100).step_by(usize::min(self.input.c as usize * 2, 22)) {
-        //             // :param
-        //             add_damage_to_hardness_if_needed(&p, h, &mut self.state, &mut self.interactor);
-        //         }
-        //     }
-        // }
-
-        let interval = 10;
-        let ps = vec![2000];
-        let trial = 20;
         let mut best = vec![INF; self.input.house.len()];
 
-        for j in 0..trial {
-            for (i, upper_p) in ps.iter().enumerate() {
+        for i in 0..8 {
+            let interval = 20 - i * 2;
+            for (j, upper_p) in (500..=500 * (i + 1)).step_by(500).enumerate() {
                 // 頑丈度を予測したグリッドを作成する
                 let mut estimated_grid = self.generate_estimated_grid(false);
 
                 let house_count = self.input.house.len();
                 // 選択経路の周りを探索する
                 for h_idx in 0..house_count {
-                    // TODO: 枝刈り
-                    // if best[h_idx] < *upper_p {
-                    //     continue;
-                    // }
+                    // 枝刈り
+                    if best[h_idx] < upper_p {
+                        continue;
+                    }
                     let (mut nearest_source_path, _) = estimated_grid.find_path_to_nearest_source(
                         &self.input.house[h_idx],
                         INF,
@@ -110,16 +104,15 @@ impl Solver {
                         // 近くの点を探す
                         estimated_grid.set(&p, true);
 
-                        if best[h_idx] < *upper_p || !ok {
+                        if best[h_idx] < upper_p || !ok {
                             continue;
                         }
 
                         let p = to_near_pos(p, &self.state, interval);
 
                         // upper_pまで硬さを調べる
-                        let mut h = 100;
-                        let step = 100;
-                        while h < *upper_p {
+                        let mut h = 30;
+                        while h < upper_p {
                             // :param
                             add_damage_to_hardness_if_needed(
                                 &p,
@@ -127,11 +120,11 @@ impl Solver {
                                 &mut self.state,
                                 &mut self.interactor,
                             );
-                            h += step;
+                            h = h * 3 / 2;
                         }
                         add_damage_to_hardness_if_needed(
                             &p,
-                            *upper_p,
+                            upper_p,
                             &mut self.state,
                             &mut self.interactor,
                         );
@@ -139,20 +132,19 @@ impl Solver {
                             ok = false;
                         }
                     }
-                    if ok && *upper_p < best[h_idx] {
+                    if ok && upper_p < best[h_idx] {
                         eprintln!("ok: {:?} at: {}, {}", &self.input.house[h_idx], upper_p, j);
-                        best[h_idx] = *upper_p;
+                        best[h_idx] = upper_p;
                     }
                 }
-
-                log(&estimated_grid, &self.state, j * ps.len() + i);
+                log(&estimated_grid, &self.state);
             }
         }
 
         let mut estimated_grid = self.generate_estimated_grid(true);
         self.optimize_route(&mut estimated_grid);
 
-        log(&estimated_grid, &self.state, ps.len() * trial);
+        log(&estimated_grid, &self.state);
 
         if cfg!(feature = "local") {
             println!("# end optimize");
@@ -253,7 +245,7 @@ impl Solver {
                 }
                 // :param
                 let mut estimated_hardness =
-                    i64::max(10, (self.estimate_hardness(&p, true) as f64 * 0.8) as i64);
+                    i64::max(10, (self.estimate_hardness(&p) as f64 * 0.8) as i64);
                 while !self.state.is_broken.get(&p) {
                     add_damage_to_hardness_if_needed(
                         &p,
@@ -274,7 +266,11 @@ impl Solver {
             for x in 0..N as i64 {
                 let p = Pos { y, x };
                 let w = {
-                    let h = self.estimate_hardness(&p, is_final);
+                    let h = if is_final {
+                        self.estimate_hardness_for_crack(&p)
+                    } else {
+                        self.estimate_hardness(&p)
+                    };
                     if is_final {
                         i64::max(0, h - self.state.damage.get(&p))
                     } else {
@@ -301,23 +297,52 @@ impl Solver {
         }
     }
 
-    fn estimate_hardness(&self, pos: &Pos, is_final: bool) -> i64 {
+    fn estimate_hardness_for_crack(&self, pos: &Pos) -> i64 {
         if self.state.is_broken.get(pos) {
-            return self.fetch_investigated_hardness(pos, is_final).unwrap();
+            return self.fetch_investigated_hardness(pos).unwrap();
         }
-        let mut sum = 0.;
-        let mut div = 0.;
-        let not_investigate_hard = if is_final { 1000 } else { 100 };
+        let not_investigate_hard = S_MAX as f64;
+        let mut ret = not_investigate_hard;
+        let mut max_w = 0.;
+        let r = 10;
 
-        for x in pos.x - 20..=pos.x + 20 {
-            for y in pos.y - 20..=pos.y + 20 {
+        for x in pos.x - r..=pos.x + r {
+            for y in pos.y - r..=pos.y + r {
                 let p = Pos { y, x };
                 if !p.is_valid() || pos == &p {
                     continue;
                 }
-                if let Some(h) = self.fetch_investigated_hardness(&p, is_final) {
+                if let Some(h) = self.fetch_investigated_hardness(&p) {
                     let d = pos.euclid_dist(&p);
-                    let radius = f64::abs((h - not_investigate_hard) as f64).powf(0.5) / 4. + 1.;
+                    let w = (10. - d) / 10.;
+                    if w > max_w {
+                        ret = w * h as f64 + (1. - w) * not_investigate_hard;
+                        max_w = w;
+                    }
+                }
+            }
+        }
+        ret as i64
+    }
+
+    fn estimate_hardness(&self, pos: &Pos) -> i64 {
+        if self.state.is_broken.get(pos) {
+            return self.fetch_investigated_hardness(pos).unwrap();
+        }
+        let mut sum = 0.;
+        let mut div = 0.;
+        let not_investigate_hard = 500;
+        let r = 20;
+
+        for x in pos.x - r..=pos.x + r {
+            for y in pos.y - r..=pos.y + r {
+                let p = Pos { y, x };
+                if !p.is_valid() || pos == &p {
+                    continue;
+                }
+                if let Some(h) = self.fetch_investigated_hardness(&p) {
+                    let d = pos.euclid_dist(&p);
+                    let radius = f64::abs((h - not_investigate_hard) as f64).sqrt() / 4. + 1.;
                     if d >= radius {
                         continue;
                     }
@@ -336,12 +361,9 @@ impl Solver {
         }
     }
 
-    fn fetch_investigated_hardness(&self, p: &Pos, is_final: bool) -> Option<i64> {
+    fn fetch_investigated_hardness(&self, p: &Pos) -> Option<i64> {
         if !self.state.is_broken.get(p) {
             if self.state.damage.get(p) > 0 {
-                if is_final {
-                    return Some(1000);
-                }
                 return Some(i64::min(S_MAX, self.state.damage.get(p) * 2));
             }
             return None;
